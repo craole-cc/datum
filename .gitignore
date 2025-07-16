@@ -1,0 +1,54 @@
+# ============================
+# Hidden files except allowed configs
+# ============================
+.*
+
+!.config/
+!.cargo/
+!.shellcheckrc
+!.treefmt.toml
+
+# ============================
+# Version control files
+# ============================
+!.git*
+# !.gitignore
+# !.gitattributes
+# !.github/
+
+# ============================
+# Temporary files and caches
+# ============================
+
+[Ll]og/
+[Tt]emp/
+[Tt]mp/
+[aA]rchive/
+[Bb]uild/
+[Cc]ache/
+[Dd]ist/
+*.bac
+*.bak
+*.log
+*.sw[a-p]
+*.tmp
+*~
+.DS_Store
+tags
+
+# ============================
+# Direnv
+# ============================
+.direnv/
+.envrc
+.env.example
+
+# ============================
+# Editor and IDE files
+# ============================
+
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+*.code-workspace
