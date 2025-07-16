@@ -1,6 +1,6 @@
 # Roadmap: From Data Enthusiast to Data Engineer & Architect
 
-Welcome to your **personal roadmap** in the `datum` portfolio. This living document will guide your transition from a data-curious developer to a **certified, hirable data engineer and (ultimately) data architect**. Your journey blends self-study, hands-on projects, certification prep, and portfolio-building, structured for clarity, skill progression, and maximum industry relevance.
+Welcome to the **professional roadmap** in the `datum` portfolio. This living document outlines a structured path from data-curious developer to **certified, hirable data engineer and (ultimately) data architect**. The roadmap combines self-study, hands-on projects, certification prep, and portfolio-building, organized for clarity, skill progression, and maximum industry relevance.
 
 ---
 
@@ -114,7 +114,7 @@ Keep a dated log of your achievements here. Example:
 | Date       | Phase/Project      | Achievement/Notes                    |
 | ---------- | ------------------ | ------------------------------------ |
 | YYYY-MM-DD | SQLMastery started | Set up project, solved 5 exercises   |
-| YYYY-MM-DD | NBA Stats Rust     | Pipeline ingests and transforms data |
+| YYYY-MM-DD | Project-2          | Pipeline ingests and transforms data |
 | …          | …                  | …                                    |
 
 Update regularly as you grow. Celebrate milestones—every skill matters!

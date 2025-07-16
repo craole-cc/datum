@@ -1,0 +1,9 @@
+#let name = "datum"
+#let title = "Datum"
+#let subtitle = "From Data Enthusiast to Guru, One Datum at a Time"
+#let author = "Craig 'Craole' Cole"
+#let tagline = "Every data journey begins with a single datum."
+#let version = "1.0.0"
+#let timezone = "America/New_York"
+#let keywords = ("data", "analysis", "documentation")
+#let language = "en"

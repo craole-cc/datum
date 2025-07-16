@@ -1,7 +1,7 @@
 services:
   sqlserver:
-    # image: mcr.microsoft.com/mssql/server:2022-latest
-    image: mcr.microsoft.com/mssql/server:2019-latest
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    # image: mcr.microsoft.com/mssql/server:2019-latest
     container_name: sqlserver
     environment:
       - ACCEPT_EULA=Y
@@ -9,9 +9,5 @@ services:
     ports:
       - "1433:1433"
     volumes:
-      - sqlserverdata:/var/opt/mssql
+      - ./bases/sql_server:/var/opt/mssql
     restart: unless-stopped
-
-volumes:
-  dbdata:
-    name: sql

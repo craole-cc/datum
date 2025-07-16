@@ -141,6 +141,7 @@ package "🔄 <b>Transformations</b>" {
 
 @enduml
 ```
+
 ## 2. ETL Process Flow
 
 ```plantuml
@@ -700,35 +701,21 @@ Repo -[#607D8B,thickness=2]-> Prod : "🚀 Release"
 2. **Customize the diagrams** by modifying:
    - Colors and styling (skinparam sections)
    - Component names and descriptions
-   - Relationships>Business Models</b>\n──────────────\n• 📈 Aggregated Metrics\n• 🎯 Key Performance KPIs\n• 📋 Analytics Views\n• 🔍 Query Optimization" as Gold_Model
-    component "⭐ <b>Star Schema</b>\n──────────────\n• 📋 Dimension Tables\n• 📊 Fact Tables\n• 🔗 Relationship Models\n• 🚀 Performance Tuned" as Gold_Star
-  }
-}
+   - Relationships>Business Models</b>\n──────────────\n• 📈 Aggregated Metrics\n• 🎯 Key Performance KPIs\n• 📋 Analytics Views\n• 🔍 Query Optimization" as Gold_Model component "⭐ <b>Star Schema</b>\n──────────────\n• 📋 Dimension Tables\n• 📊 Fact Tables\n• 🔗 Relationship Models\n• 🚀 Performance Tuned" as Gold_Star } }
 
-rectangle "📊 Data Access Layer" as DataAccess {
-  interface "📈 <b>BI Tools</b>\n──────────────\n🔍 Power BI\n📊 Tableau\n📋 SSRS Reports" as BI
-  interface "🗃️ <b>SQL Queries</b>\n──────────────\n💻 Ad-hoc Analysis\n🔍 Data Mining\n⚡ Direct Access" as Reports
-  interface "🤖 <b>ML Pipelines</b>\n──────────────\n🧠 Model Training\n🔮 Predictions\n📈 Analytics" as ML
-}
+rectangle "📊 Data Access Layer" as DataAccess { interface "📈 <b>BI Tools</b>\n──────────────\n🔍 Power BI\n📊 Tableau\n📋 SSRS Reports" as BI interface "🗃️ <b>SQL Queries</b>\n──────────────\n💻 Ad-hoc Analysis\n🔍 Data Mining\n⚡ Direct Access" as Reports interface "🤖 <b>ML Pipelines</b>\n──────────────\n🧠 Model Training\n🔮 Predictions\n📈 Analytics" as ML }
 
-CRM_DB -[#4CAF50,thickness=3]-> CRM_Stage
-ERP_DB -[#4CAF50,thickness=3]-> ERP_Stage
+CRM_DB -[#4CAF50,thickness=3]-> CRM_Stage ERP_DB -[#4CAF50,thickness=3]-> ERP_Stage
 
-CRM_Stage -[#FF8F00,thickness=3]-> Bronze_Raw
-ERP_Stage -[#FF8F00,thickness=3]-> Bronze_Raw
+CRM_Stage -[#FF8F00,thickness=3]-> Bronze_Raw ERP_Stage -[#FF8F00,thickness=3]-> Bronze_Raw
 
-Bronze_Raw -[#FF8F00,thickness=3]-> Silver_Clean
-Silver_Clean -[#FFC107,thickness=3]-> Silver_Enrich
-Silver_Enrich -[#FFC107,thickness=3]-> Gold_Model
-Silver_Enrich -[#FFC107,thickness=3]-> Gold_Star
+Bronze_Raw -[#FF8F00,thickness=3]-> Silver_Clean Silver_Clean -[#FFC107,thickness=3]-> Silver_Enrich Silver_Enrich -[#FFC107,thickness=3]-> Gold_Model Silver_Enrich -[#FFC107,thickness=3]-> Gold_Star
 
-Gold_Model -[#9C27B0,thickness=3]-> BI
-Gold_Star -[#9C27B0,thickness=3]-> Reports
-Gold_Model -[#9C27B0,thickness=3]-> ML
+Gold_Model -[#9C27B0,thickness=3]-> BI Gold_Star -[#9C27B0,thickness=3]-> Reports Gold_Model -[#9C27B0,thickness=3]-> ML
 
 @enduml
-```
 
+````
 ## 4. Data Modeling - Star Schema
 
 ```plantuml
@@ -845,7 +832,7 @@ FactSales -[#9C27B0,thickness=3]-> DimDate : "date_key"
 FactSales -[#E91E63,thickness=3]-> DimStore : "store_key"
 
 @enduml
-```
+````
 
 ## 5. Data Integration Process
 
