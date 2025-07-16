@@ -1,7 +1,9 @@
-```markdown
 # datum
 
-Welcome to **datum**—A unified lab for exploring, engineering, and analyzing data using both Python and Rust, version-controlled using `jj`. This repository serves as my personal portfolio and playground as I transition toward data engineering and architecture.
+Welcome to **datum**—A unified lab for exploring, engineering, and analyzing
+data using both Python and Rust, version-controlled using `jj`. This repository
+serves as my personal portfolio and playground as I transition toward data
+engineering and architecture.
 
 ## Table of Contents
 
@@ -14,14 +16,18 @@ Welcome to **datum**—A unified lab for exploring, engineering, and analyzing d
 
 ## Overview & Goals
 
-- **Mission:** Build deep, practical, and professional data engineering skills, demonstrated through small, focused, versioned projects.
-- **Technologies:** Python (monorepo style) and Rust (cargo workspace) are central, with public datasets and shared tools.
-- **Learning Focus:** Master SQL (with the growing `sqlmastery` project); develop ETL, analytics, and engineering solutions in both ecosystems.
-- **Organization:** Keep projects highly modular; each folder in `python/` or `rust/` is a separate, clean, self-contained experiment or application.
+- **Mission:** Build deep, practical, and professional data engineering skills,
+  demonstrated through small, focused, versioned projects.
+- **Technologies:** Python (monorepo style) and Rust (cargo workspace) are
+  central, with public datasets and shared tools.
+- **Learning Focus:** Master SQL (with the growing `sqlmastery` project);
+  develop ETL, analytics, and engineering solutions in both ecosystems.
+- **Organization:** Keep projects highly modular; each folder in `python/` or
+  `rust/` is a separate, clean, self-contained experiment or application.
 
 ## Project Structure
 
-```
+```sh
 datum/
 │
 ├── README.md                # This file
@@ -44,27 +50,36 @@ datum/
 
 **Notes:**
 
-- Each project subfolder (`python/*`, `rust/*`) includes its own README, objectives, dependencies, and instructions.
-- `shared/` serves as the single source for datasets and reusable setup, encouraging consistency across projects.
+- Each project subfolder (`python/*`, `rust/*`) includes its own README,
+  objectives, dependencies, and instructions.
+- `shared/` serves as the single source for datasets and reusable setup,
+  encouraging consistency across projects.
 
 ## Version Control
 
 - **System:** [Jujutsu (jj)](https://github.com/martinvonz/jj)
-- **Rationale:** Fast, flexible, and ideal for managing the evolving structure and history of a multi-language, exploratory repo.
-- Regular commits document experiments, learning milestones, and project boundaries.
+- **Rationale:** Fast, flexible, and ideal for managing the evolving structure
+  and history of a multi-language, exploratory repo.
+- Regular commits document experiments, learning milestones, and project
+  boundaries.
 
 ## Conventions & Best Practices
 
-- **Modularity:** Each sub-project is small and focused. When a project grows too complex, it should be split.
-- **Documentation:** Each folder features its own README with a project statement, setup, rationale, and links back to this main index.
-- **Public Data Only:** All datasets and notebooks should use freely available, public data.
-- **Shared Utilities:** Scripts or code meant for cross-project use belong in `shared/`.
-- **Growing SQLMastery:** Focus on skill progression; new exercises and database challenges are added here.
+- **Modularity:** Each sub-project is small and focused. When a project grows
+  too complex, it should be split.
+- **Documentation:** Each folder features its own README with a project
+  statement, setup, rationale, and links back to this main index.
+- **Public Data Only:** All datasets and notebooks should use freely available,
+  public data.
+- **Shared Utilities:** Scripts or code meant for cross-project use belong in
+  `shared/`.
+- **Growing SQLMastery:** Focus on skill progression; new exercises and database
+  challenges are added here.
 
 ## License
 
-**Recommended License:**  
-The MIT License allows broad reuse with minimal restrictions, which is well-suited for open learning projects using public data.
+**Recommended License:** The MIT License allows broad reuse with minimal
+restrictions, which is well-suited for open learning projects using public data.
 
 If you want to distinguish code and data licensing, consider dual licensing:
 
@@ -80,18 +95,19 @@ To implement dual licensing:
 ## Getting Started
 
 1. **Clone the repository:**
-    ```
-    git clone 
-    cd datum
-    ```
-2. **Install dependencies:**  
-   Check each project's README in `python/` or `rust/` for setup instructions.
-3. **Setup data:**  
-   Use scripts or instructions in `shared/` to download or prepare datasets.
-4. **Explore Projects:**  
-   Begin with `python/sqlmastery/` for SQL skill building; watch for new Rust or Python projects as they appear.
+
+   ```sh
+   git clone https://github.com/craole-cc/datum.git
+   cd datum
+   ```
+
+2. **Install dependencies:** Check each project's README in `python/` or `rust/`
+   for setup instructions.
+3. **Setup data:** Use scripts or instructions in `shared/` to download or
+   prepare datasets.
+4. **Explore Projects:** Begin with `python/sqlmastery/` for SQL skill building;
+   watch for new Rust or Python projects as they appear.
 
 ---
 
 _Every data journey begins with a single datum._
-```
