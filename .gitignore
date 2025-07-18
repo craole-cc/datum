@@ -15,6 +15,7 @@
 # !.gitignore
 # !.gitattributes
 # !.github/
+!environment/
 
 # ============================
 # Temporary files and caches
