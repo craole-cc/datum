@@ -1,0 +1,35 @@
+[tools]
+"cargo:eza" = "latest"
+"cargo:treefmt" = "latest"
+"jujutsu" = "latest"
+
+[tasks.lint]
+description = "Format the project tree"
+alias = "f"
+run = [
+  "mise fmt",
+  "treefmt --clear-cache --fail-on-change --allow-missing-formatter",
+]
+
+[tasks.push]
+description = "Push the changes to the main branch"
+alias = "p"
+# run = 'echo {{arg(name="file")}}'
+# run = 'jj describe --message {{arg(name="file")}}'
+# env = { MESSAGE = "{{arg(0)}}" }
+# run = ["jj describe --message \"${MESSAGE}\""]
+run = [
+  "jj --version",
+  "jj describe",
+  "jj bookmark set main --revision=@",
+  "jj git push",
+
+  #   #   # "jj describe --message \"{{arg(0, default='Default commit message')}}\"",
+  #   #   "jj describe --message \"${MESSAGE:-Default commit message}\"",
+
+  #   # "echo Received args: $@",
+  #   # "shift",
+  #   "echo First arg: ",
+  #   # "jj describe --message \"$1\"",
+
+]

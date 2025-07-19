@@ -110,7 +110,6 @@ Format all files in the project tree.
 
 ```nu
 #!/usr/bin/env nu
-# Format justfiles in the project tree
 let files = [
     (glob **/justfile),
     (glob **/*.justfile),
@@ -118,7 +117,7 @@ let files = [
 ] | flatten
 
 $files | each {|file|
-    print $"Formatting ($file)"
+    print $"[INFO ] #just: ($file)"
     try {
         just --fmt --unstable --justfile $file
     } catch {
@@ -135,43 +134,19 @@ treefmt --clear-cache --fail-on-change --allow-missing-formatter
 Format all files in the project tree.
 
 ```sh
-# Check if nushell is available and prefer it
-if command -v nu >/dev/null 2>&1; then
-    echo "Using nushell for formatting..."
-    nu -c '
-    let files = [
-        (glob **/justfile),
-        (glob **/*.justfile),
-        (glob **/.justfile)
-    ] | flatten
-
-    $files | each {|file|
-        print $"Formatting ($file)"
-        try {
-            just --fmt --unstable --justfile $file
-        } catch {
-            print $"Failed to format ($file)"
-        }
-    }
-    '
-# Check if we're in PowerShell environment
-elif [ "$PSVersionTable" ] || command -v pwsh >/dev/null 2>&1; then
-    echo "PowerShell detected - running treefmt only..."
-# Otherwise use standard shell approach
-else
-    echo "Using shell for formatting..."
-    find . -name "justfile" -o -name "*.justfile" -o -name ".justfile" | \
-    while read -r file; do
-        echo "Formatting $file"
-        just --fmt --unstable --justfile "$file" || echo "Failed to format $file"
-    done
-fi
+set +x
+find . -name "justfile" -o -name "*.justfile" -o -name ".justfile" | \
+while read -r file; do
+    printf "Formatting '%s'" "$file"
+    just --fmt --unstable --justfile "$file" ||
+      printf "Failed to format '%s'" "$file"
+done
 
 # Always run treefmt at the end
-treefmt --clear-cache --fail-on-change
+treefmt --clear-cache --fail-on-change --allow-missing-formatter
 ```
 
-### Push-Changes
+### push
 
 Commit changes to the main branch, but with a provided message.
 
@@ -183,7 +158,7 @@ jj bookmark set main --revision=@
 jj git push
 ```
 
-### Push-Changes-Interactively
+### push-interactively
 
 Commit changes to the main branch.
 

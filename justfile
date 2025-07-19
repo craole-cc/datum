@@ -18,7 +18,7 @@ fmt:
     treefmt --clear-cache --fail-on-change
 
 fmt-ps:
-    #!powershell
+    #!/usr/bin/env pwsh
     # PowerShell version
     Get-ChildItem -Recurse -Include "justfile","*.justfile",".justfile" | ForEach-Object {
         Write-Host "Formatting $_"
