@@ -58,7 +58,7 @@ tags
 # ============================
 # Local Files
 # ============================
-environment/bases/sql_server/*
-!environment/bases/sql_server/.keep
+environment/*
+!environment/*.compose.yml
 
 

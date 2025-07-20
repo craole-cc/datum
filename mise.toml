@@ -1,49 +1,54 @@
 
 [settings]
-# quiet = true
+experimental = true
+lockfile = true
+quiet = true
 
 [tools]
+"bat" = "latest"
+"deno" = "latest"
+"cargo-binstall" = "latest"
 "cargo:eza" = "latest"
 "cargo:treefmt" = "latest"
 "jujutsu" = "latest"
+"ripgrep" = "latest"
+"taplo" = "latest"
 "tokei" = "latest"
-"uv" = "latest"
 "usage" = "latest"
+"uv" = "latest"
 "watchexec" = "latest"
-
 
 [env]
 PRJ_ROOT = "{{config_root}}"
+PRJ_ENV = "{{config_root}}\\environment"
 MISE_PROJECT_ROOT = "{{env.PRJ_ROOT}}"
 PRJ_NAME = "{{ cwd | basename }}"
 DATETIME = "{{ now() | date(format='%Y-%m-%d_%H:%M:%S') }}"
-DB_SQL_SERVER = "{{cwd}}\\environment\\bases\\sql_server"
-TESTER = "{{env.PRJ_ROOT}}\\testing"
+MSSQL_CONTAINER = "mssql"
+MSSQL_COMPOSE = "{{env.PRJ_ENV}}\\mssql.compose.yml"
+MSSQL_VOLUME = "{{env.MSSQL_CONTAINER}}_data"
+MSSQL_PASSWORD = "P@ssw0rd"
+MSSQL_USER = "sa"
+MSSQL_DB = "master"
+MSSQL_PORT = "14330"
 
-[tasks.test]
-env.TEST_ENV_VAR = "ABC"
-description = "Initialize the SQL Server"
-hide = true
-confirm = "Are you sure you want to test?"
-usage = '''
-  arg "<user>" default="unknown"
-  complete "user" run="{{mise_bin}} run list-users-completion"
-'''
+# [hooks]
+# enter = "{{mise_bin}} install" # Doersn't seem to do anything
+
+[tasks.info]
+description = "Show the information about the project"
+alias = "inf"
 run = [
-  "echo {{env.PRJ_NAME}}",
-  "echo {{env.TEST_ENV_VAR}}",
-  "{{mise_bin}} files {{env.DB_SQL_SERVER}}",
-  "echo 'The exact time now: {{ env.DATETIME }}'",
-  "echo 'it {{arg(name='user')}} added'",
-  """
-    echo It's being added by {{arg(name='user')}}.
-    # if [ '{{arg(name='user')}}' = 'unknown' ]; then
-    #   echo 'cleaning'
-    # fi
-  """,
-  # arg "file" description="The file to test" default="src/main.rs"
-  # "echo {{arg(name='file')}}",
-  # arg "user" description="The file to test" default="unknown"
+  "eza --version",
+  "cargo --version",
+  "jj --version",
+  "python --version",
+  "rustc --version",
+  "tokei --version",
+  "treefmt --version",
+  "uv --version",
+  "tokei",
+  "{{mise_bin}} files",
 ]
 
 [tasks.lint]
@@ -57,22 +62,7 @@ run = [
 [tasks.push]
 description = "Push the changes to the main branch"
 alias = "up"
-run = [
-  #   "jj --version",
-  "jj describe",
-  "jj bookmark set main --revision=@",
-  "jj git push",
-]
-
-# [tasks.commit]
-# description = "Push the changes to the main branch"
-# alias = "up"
-# run = [
-#   #   "jj --version",
-#   "jj describe",
-#   "jj bookmark set main --revision=@",
-#   "jj git push",
-# ]
+run = ["jj describe", "jj bookmark set main --revision=@", "jj git push"]
 
 [tasks.files]
 description = "List the files in the current directory"
@@ -84,33 +74,154 @@ description = "List the files recursively from the current directory"
 alias = "ft"
 run = "eza --icons --long --group-directories-first --git --tree"
 
-[tasks.sql]
+[tasks.mssql]
 description = "Initialize the SQL Server"
-alias = "sup"
+alias = "ms"
 run = [
-  "mkdir {{env.DB_SQL_SERVER}}",
-  "{{mise_bin}} files {{env.DB_SQL_SERVER}}",
+  #~@ Stop and remove the container if it exists
+  "({{flag(name='rebuild')}} && {{mise_bin}} mssql-rm-container) || true",
+
+  #~@ Remove the named volume to ensure clean state
+  "({{flag(name='clean')}} && {{mise_bin}} mssql-rm-container && {{mise_bin}} mssql-rm-volume) || true",
+
+  #~@ Interact with the compose file
+  "({{flag(name='stop')}} && {{mise_bin}} mssql-stop) || {{mise_bin}} mssql-compose",
+
+  #~@ Initialize the server with podman
+  # "podman compose --file {{env.MSSQL_COMPOSE}} up --build --detach",
+
+  #~@ Check if the server is running
+  # "({{flag(name='info')}} && podman ps --no-trunc --filter name={{env.MSSQL_CONTAINER}} --format json) || true",
 ]
 
-[tasks.info]
-description = "Show the information about the project"
-alias = "inf"
-run = ["tokei", "{{mise_bin}} files"]
-
-[tasks.add-user]
-description = "Add a user"
-usage = '''
-arg "<user>" default="unknown"
-complete "user" run="mise run list-users-completion"
-'''
-run = ["echo 'it {{arg(name='user')}} added'", "{{mise_bin}} files"]
-
-
-[tasks.maybeClean]
+[tasks.mssql_new]
+description = "Initialize the SQL Server with optional flags"
+alias = "sup"
 run = """
-if [ '{{flag(name='clean')}}' = 'true' ]; then
-  echo 'cleaning'
+# Parse command line flags
+CLEAN_FLAG=""
+INFO_FLAG=""
+WAIT_FLAG=""
+
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -c|--clean)
+      CLEAN_FLAG="true"
+      shift
+      ;;
+    -i|--info)
+      INFO_FLAG="true"
+      shift
+      ;;
+    -w|--wait)
+      WAIT_FLAG="true"
+      shift
+      ;;
+    *)
+      shift
+      ;;
+  esac
+done
+
+# Clean up existing container and volume if --clean flag is passed
+if [[ "$CLEAN_FLAG" == "true" ]]; then
+  echo "🧹 Cleaning up existing container and volume..."
+  (podman container exists {{env.MSSQL_CONTAINER}} && podman stop {{env.MSSQL_CONTAINER}} && podman rm {{env.MSSQL_CONTAINER}}) || true
+  (podman volume exists {{env.MSSQL_VOLUME}} && podman volume rm {{env.MSSQL_VOLUME}}) || true
+fi
+
+# Start the SQL Server
+echo "🚀 Starting SQL Server container..."
+podman compose --file {{env.MSSQL_COMPOSE}} up --build --detach
+
+# Wait for SQL Server to be ready if --wait flag is passed
+if [[ "$WAIT_FLAG" == "true" ]]; then
+  echo "⏳ Waiting for SQL Server to be ready..."
+  max_attempts=30
+  attempt=0
+
+  while [[ $attempt -lt $max_attempts ]]; do
+    if podman exec {{env.MSSQL_CONTAINER}} /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "P@ssw0rd" -Q "SELECT 1" > /dev/null 2>&1; then
+      echo "✅ SQL Server is ready!"
+      break
+    fi
+
+    attempt=$((attempt + 1))
+    echo "Attempt $attempt/$max_attempts - SQL Server not ready yet..."
+    sleep 2
+  done
+
+  if [[ $attempt -eq $max_attempts ]]; then
+    echo "❌ SQL Server failed to start within expected time"
+    exit 1
+  fi
+fi
+
+# Show container info if --info flag is passed
+if [[ "$INFO_FLAG" == "true" ]]; then
+  echo "📊 Container Information:"
+  # podman ps --no-trunc --filter name={{env.MSSQL_CONTAINER}} --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
+
+  echo -e "\n🔗 Connection Details:"
+  echo "Host: localhost"
+  echo "Port: 14330"
+  echo "Username: sa"
+  echo "Password: P@ssw0rd"
+  echo "Database: master"
+
+  echo -e "\n📝 Connection String Examples:"
+  echo "ADO.NET: Server=localhost,14330;Database=master;User Id=sa;Password=P@ssw0rd;TrustServerCertificate=True;"
+  echo "ODBC: Driver={ODBC Driver 17 for SQL Server};Server=localhost,14330;Database=master;Uid=sa;Pwd=P@ssw0rd;TrustServerCertificate=yes;"
 fi
 """
-# execute: mise run maybeClean --clean
-# runs: echo cleaning
+
+[tasks.mssql-test]
+description = "Test SQL Server connection"
+alias = "test"
+env = { container = "mssql" }
+run = """
+echo "🔍 Testing SQL Server connection..."
+if podman exec {{env.MSSQL_CONTAINER}} /opt/mssql-tools/bin/sqlcmd -S localhost -U sa -P "P@ssw0rd" -Q "SELECT @@VERSION, GETDATE() as CurrentTime"; then
+  echo "✅ Connection successful!"
+else
+  echo "❌ Connection failed!"
+  echo "📋 Container logs:"
+  podman logs --tail 20 {{env.MSSQL_CONTAINER}}
+fi
+"""
+
+[tasks.mssql-logs]
+description = "Show SQL Server container logs"
+alias = "logs"
+env = { container = "mssql" }
+run = "podman logs -f {{env.MSSQL_CONTAINER}}"
+
+[tasks.mssql-stop]
+description = "Stop the MSSQL Server container"
+alias = "ms-stop"
+run = "podman compose --file {{env.MSSQL_COMPOSE}} down || true"
+
+[tasks.mssql-compose]
+description = "Start the MSSQL Server container"
+alias = "ms-compose"
+run = "podman compose --file {{env.MSSQL_COMPOSE}} up --build --detach"
+
+[tasks.mssql-rm-container]
+description = "Remove the MSSQL Server Container"
+hide = true
+alias = "mssqlc"
+confirm = 'Are you sure you want stop/remove the container?'
+run = [
+  "(podman ps --filter name={{env.MSSQL_CONTAINER}} | rg {{env.MSSQL_CONTAINER}} --quiet && podman stop {{env.MSSQL_CONTAINER}}) || true",
+  "(podman container exists {{env.MSSQL_CONTAINER}} && podman rm {{env.MSSQL_CONTAINER}} && echo container stopped and removed) || true",
+]
+
+[tasks.mssql-rm-volume]
+description = "Remove MSSQL Server Database Volume"
+hide = true
+alias = "mssqlv"
+confirm = 'Are you sure you want reset the database volume?'
+env = { volume = "environment_{{env.MSSQL_VOLUME}}" }
+run = """
+  (podman volume exists {{env.volume}} && podman volume rm {{env.volume}} && echo volume removed) || true
+"""
