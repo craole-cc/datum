@@ -1,13 +1,56 @@
+
+[settings]
+# quiet = true
+
 [tools]
 "cargo:eza" = "latest"
 "cargo:treefmt" = "latest"
 "jujutsu" = "latest"
+"tokei" = "latest"
+"uv" = "latest"
+"usage" = "latest"
+"watchexec" = "latest"
+
+
+[env]
+PRJ_ROOT = "{{config_root}}"
+MISE_PROJECT_ROOT = "{{env.PRJ_ROOT}}"
+PRJ_NAME = "{{ cwd | basename }}"
+DATETIME = "{{ now() | date(format='%Y-%m-%d_%H:%M:%S') }}"
+DB_SQL_SERVER = "{{cwd}}\\environment\\bases\\sql_server"
+TESTER = "{{env.PRJ_ROOT}}\\testing"
+
+[tasks.test]
+env.TEST_ENV_VAR = "ABC"
+description = "Initialize the SQL Server"
+hide = true
+confirm = "Are you sure you want to test?"
+usage = '''
+  arg "<user>" default="unknown"
+  complete "user" run="{{mise_bin}} run list-users-completion"
+'''
+run = [
+  "echo {{env.PRJ_NAME}}",
+  "echo {{env.TEST_ENV_VAR}}",
+  "{{mise_bin}} files {{env.DB_SQL_SERVER}}",
+  "echo 'The exact time now: {{ env.DATETIME }}'",
+  "echo 'it {{arg(name='user')}} added'",
+  """
+    echo It's being added by {{arg(name='user')}}.
+    # if [ '{{arg(name='user')}}' = 'unknown' ]; then
+    #   echo 'cleaning'
+    # fi
+  """,
+  # arg "file" description="The file to test" default="src/main.rs"
+  # "echo {{arg(name='file')}}",
+  # arg "user" description="The file to test" default="unknown"
+]
 
 [tasks.lint]
 description = "Format the project tree"
 alias = "f"
 run = [
-  "mise fmt",
+  "{{mise_bin}} fmt",
   "treefmt --clear-cache --fail-on-change --allow-missing-formatter",
 ]
 
@@ -21,6 +64,16 @@ run = [
   "jj git push",
 ]
 
+# [tasks.commit]
+# description = "Push the changes to the main branch"
+# alias = "up"
+# run = [
+#   #   "jj --version",
+#   "jj describe",
+#   "jj bookmark set main --revision=@",
+#   "jj git push",
+# ]
+
 [tasks.files]
 description = "List the files in the current directory"
 alias = "fl"
@@ -31,12 +84,33 @@ description = "List the files recursively from the current directory"
 alias = "ft"
 run = "eza --icons --long --group-directories-first --git --tree"
 
-[tasks.test]
-run = 'echo myarg={{cwd}}'
-# run = 'echo myarg={{arg(name="path")}}'
+[tasks.sql]
+description = "Initialize the SQL Server"
+alias = "sup"
+run = [
+  "mkdir {{env.DB_SQL_SERVER}}",
+  "{{mise_bin}} files {{env.DB_SQL_SERVER}}",
+]
 
-# execute: mise run usage-env-example
-# outputs: myarg=foo
+[tasks.info]
+description = "Show the information about the project"
+alias = "inf"
+run = ["tokei", "{{mise_bin}} files"]
 
-# execute: mise run usage-env-example bar
-# outputs: myarg=bar
+[tasks.add-user]
+description = "Add a user"
+usage = '''
+arg "<user>" default="unknown"
+complete "user" run="mise run list-users-completion"
+'''
+run = ["echo 'it {{arg(name='user')}} added'", "{{mise_bin}} files"]
+
+
+[tasks.maybeClean]
+run = """
+if [ '{{flag(name='clean')}}' = 'true' ]; then
+  echo 'cleaning'
+fi
+"""
+# execute: mise run maybeClean --clean
+# runs: echo cleaning
