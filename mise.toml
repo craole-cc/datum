@@ -13,23 +13,30 @@ run = [
 
 [tasks.push]
 description = "Push the changes to the main branch"
-alias = "p"
-# run = 'echo {{arg(name="file")}}'
-# run = 'jj describe --message {{arg(name="file")}}'
-# env = { MESSAGE = "{{arg(0)}}" }
-# run = ["jj describe --message \"${MESSAGE}\""]
+alias = "up"
 run = [
-  "jj --version",
+  #   "jj --version",
   "jj describe",
   "jj bookmark set main --revision=@",
   "jj git push",
-
-  #   #   # "jj describe --message \"{{arg(0, default='Default commit message')}}\"",
-  #   #   "jj describe --message \"${MESSAGE:-Default commit message}\"",
-
-  #   # "echo Received args: $@",
-  #   # "shift",
-  #   "echo First arg: ",
-  #   # "jj describe --message \"$1\"",
-
 ]
+
+[tasks.files]
+description = "List the files in the current directory"
+alias = "fl"
+run = "eza --icons --long --group-directories-first --git"
+
+[tasks.tree]
+description = "List the files recursively from the current directory"
+alias = "ft"
+run = "eza --icons --long --group-directories-first --git --tree"
+
+[tasks.test]
+run = 'echo myarg={{cwd}}'
+# run = 'echo myarg={{arg(name="path")}}'
+
+# execute: mise run usage-env-example
+# outputs: myarg=foo
+
+# execute: mise run usage-env-example bar
+# outputs: myarg=bar
