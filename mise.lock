@@ -3,12 +3,13 @@ version = "0.25.0"
 backend = "aqua:sharkdp/bat"
 
 [tools.cargo-binstall]
-version = "0.2.0"
+version = "1.14.1"
 backend = "aqua:cargo-bins/cargo-binstall"
 
-[tools."cargo:eza"]
-version = "0.23.0"
-backend = "cargo:eza"
+[tools.cargo-binstall.platforms.windows-x64]
+checksum = "blake3:a399f0290d76c456172de381c86a173658404aa4a82f00ce5987fd3ee6af5377"
+size = 6295683
+url = "https://github.com/cargo-bins/cargo-binstall/releases/download/v1.14.1/cargo-binstall-x86_64-pc-windows-msvc.zip"
 
 [tools."cargo:treefmt"]
 version = "0.6.1"
@@ -17,6 +18,18 @@ backend = "cargo:treefmt"
 [tools.deno]
 version = "2.4.2"
 backend = "core:deno"
+
+[tools.docker-cli]
+version = "28.3.2"
+backend = "aqua:docker/cli"
+
+[tools.docker-compose]
+version = "2.38.2"
+backend = "aqua:docker/compose"
+
+[tools.eza]
+version = "0.23.0"
+backend = "cargo:eza"
 
 [tools.jujutsu]
 version = "0.31.0"
@@ -35,8 +48,13 @@ version = "12.1.2"
 backend = "aqua:XAMPPRocky/tokei"
 
 [tools.uv]
-version = "0.7.20"
+version = "0.8.0"
 backend = "aqua:astral-sh/uv"
+
+[tools.uv.platforms.windows-x64]
+checksum = "sha256:bad5afed0c18bd7f6c5125f5c7ab89ac830a3db7340c96d50a50527e9880cdfe"
+size = 18904597
+url = "https://github.com/astral-sh/uv/releases/download/0.8.0/uv-x86_64-pc-windows-msvc.zip"
 
 [tools.watchexec]
 version = "2.3.2"

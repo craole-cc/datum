@@ -1,34 +1,26 @@
 # ============================
-# Hidden files except allowed configs
+# Priority files
 # ============================
-.*
-
-!.config/
-!.cargo/
-!.shellcheckrc
-!.treefmt.toml
 !.keep
+!environment/containers/
+!data/sources/**/*.csv
 
 # ============================
-# Version control files
+# Private files
 # ============================
-!.git*
-# !.gitignore
-# !.gitattributes
-# !.github/
-!environment/
-
+.env/
+secrets/
 # ============================
 # Temporary files and caches
 # ============================
 
+[Bb]uild/
+[Cc]ache/
+[Dd]ist/
 [Ll]og/
 [Tt]emp/
 [Tt]mp/
 [aA]rchive/
-[Bb]uild/
-[Cc]ache/
-[Dd]ist/
 *.bac
 *.bak
 *.log
@@ -48,17 +40,5 @@ tags
 # ============================
 # Editor and IDE files
 # ============================
-
-.idea/
-.vscode/
-*.sublime-project
-*.sublime-workspace
+!.vscode/
 *.code-workspace
-
-# ============================
-# Local Files
-# ============================
-environment/*
-!environment/*.compose.yml
-
-
