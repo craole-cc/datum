@@ -47,3 +47,10 @@ excludes = [
   "**/.git/**",
 ]
 priority = 1
+
+
+# [formatter.sqruff]
+# command = "sqruff"
+# excludes = []
+# includes = ["*.sql"]
+# options = ["fix", "--format", "human"]

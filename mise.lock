@@ -11,6 +11,10 @@ checksum = "blake3:a399f0290d76c456172de381c86a173658404aa4a82f00ce5987fd3ee6af5
 size = 6295683
 url = "https://github.com/cargo-bins/cargo-binstall/releases/download/v1.14.1/cargo-binstall-x86_64-pc-windows-msvc.zip"
 
+[tools."cargo:sqruff"]
+version = "0.28.2"
+backend = "cargo:sqruff"
+
 [tools."cargo:treefmt"]
 version = "0.6.1"
 backend = "cargo:treefmt"

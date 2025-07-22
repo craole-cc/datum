@@ -1,0 +1,17 @@
+ID,CAT,SUBCAT,MAINTENANCE
+AC_BR,Accessories,Bike Racks,Yes
+AC_BS,Accessories,Bike Stands,No
+AC_BC,Accessories,Bottles and Cages,No
+AC_CL,Accessories,Cleaners,Yes
+AC_FE,Accessories,Fenders,No
+AC_HE,Accessories,Helmets,Yes
+AC_HP,Accessories,Hydration Packs,No
+AC_LI,Accessories,Lights,Yes
+AC_LO,Accessories,Locks,Yes
+AC_PA,Accessories,Panniers,No
+AC_PU,Accessories,Pumps,Yes
+AC_TT,Accessories,Tires and Tubes,Yes
+BI_MB,Bikes,Mountain Bikes,Yes
+BI_RB,Bikes,Road Bikes,Yes
+BI_TB,Bikes,Touring Bikes,Yes
+CL_BS,Clothing,Bib-Shorts,No

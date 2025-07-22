@@ -11,6 +11,7 @@ windows_shim_mode = "symlink"
 'eza' = 'latest'
 'cargo-binstall' = 'latest'
 'cargo:treefmt' = 'latest'
+'cargo:sqruff' = 'latest'
 'docker-cli' = 'latest'
 'docker-compose' = 'latest'
 'docker-slim' = 'latest'

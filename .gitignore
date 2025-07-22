@@ -18,6 +18,8 @@ secrets/
 [Cc]ache/
 [Dd]ist/
 [Ll]og/
+**/[Ll]og/
+**/[Ll]ogs/**
 [Tt]emp/
 [Tt]mp/
 [aA]rchive/
