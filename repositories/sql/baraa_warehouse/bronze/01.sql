@@ -269,7 +269,8 @@ host_name NVARCHAR (256) DEFAULT HOST_NAME () NOT NULL,
 --| Error classification
 severity INT NULL,
 state INT NULL
-);
+)
+;
 
 PRINT '    [INFO] Error logging infrastructure established successfully.' ;
 GO

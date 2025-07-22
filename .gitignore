@@ -4,6 +4,7 @@
 !.keep
 !environment/containers/
 !data/sources/**/*.csv
+!mise.*
 
 # ============================
 # Private files

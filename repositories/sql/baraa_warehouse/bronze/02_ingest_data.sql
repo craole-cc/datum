@@ -1,13 +1,14 @@
 USE BaraaWarehouse;
 GO
 
-EXEC bronze.load_bronze;
+EXEC bronze.load_bronze ;
 GO
 
 CREATE OR ALTER PROCEDURE bronze.load_bronze
 AS
 BEGIN
-  DECLARE @stage VARCHAR(100);
+DECLARE
+@stage VARCHAR(100);
   DECLARE @startTime DATETIME2, @endTime DATETIME2, @elapsedMs INT;
   BEGIN TRANSACTION
 

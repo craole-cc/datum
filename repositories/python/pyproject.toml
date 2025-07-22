@@ -1,14 +1,19 @@
 [project]
 name = "python"
 version = "0.1.0"
-description = "Add your description here"
+description = "A unified lab for exploring, engineering, and analyzing data"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = []
 
 [dependency-groups]
-dev = ["polylith-cli>=1.30.1"]
+dev = [
+    "polylith-cli>=1.30.1",
+]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build]
+dev-mode-dirs = ["components", "bases", "development", "."]

@@ -52,13 +52,13 @@ version = "12.1.2"
 backend = "aqua:XAMPPRocky/tokei"
 
 [tools.uv]
-version = "0.8.0"
+version = "0.8.2"
 backend = "aqua:astral-sh/uv"
 
 [tools.uv.platforms.windows-x64]
-checksum = "sha256:bad5afed0c18bd7f6c5125f5c7ab89ac830a3db7340c96d50a50527e9880cdfe"
-size = 18904597
-url = "https://github.com/astral-sh/uv/releases/download/0.8.0/uv-x86_64-pc-windows-msvc.zip"
+checksum = "sha256:503a430df36957f851daedaed707a2ab69ed21a48bd499c2f0f7253ad5ba983f"
+size = 18910576
+url = "https://github.com/astral-sh/uv/releases/download/0.8.2/uv-x86_64-pc-windows-msvc.zip"
 
 [tools.watchexec]
 version = "2.3.2"

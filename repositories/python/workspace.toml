@@ -14,6 +14,3 @@ brick_docs_enabled = false
 
 [tool.polylith.test]
 enabled = true
-
-[tool.hatch.build]
-dev-mode-dirs = ["components", "bases", "development", "."]

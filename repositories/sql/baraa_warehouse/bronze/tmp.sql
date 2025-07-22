@@ -1,12 +1,10 @@
--- ===============================================================================
--- BARAA WAREHOUSE - BRONZE LAYER DATA LOADING PROCEDURE (FIXED)
--- ===============================================================================
---
+--==================================================================
+--> BARAA WAREHOUSE - BRONZE LAYER - DATA LOADING PROCEDURE
+--==================================================================
 -- PURPOSE: Loads raw CSV data into bronze schema tables with comprehensive
 --          error handling, performance monitoring, and detailed logging
 -- TARGET:  Microsoft SQL Server Database
--- AUTHOR:  Data Engineering Team
---
+-- AUTHOR:  Craig Cole
 -- FEATURES:
 --    * High-performance bulk loading with optimized batch sizes
 --    * Comprehensive transaction management and rollback capability
@@ -14,25 +12,34 @@
 --    * Robust error handling with centralized logging
 --    * Clean, professional output formatting
 --    * Data quality tolerance for bronze layer ingestion
---    * FIXED: Error file cleanup to prevent file existence conflicts
+--    * Error file cleanup to prevent file existence conflicts
 --
--- ===============================================================================
+--==================================================================
 
-USE BaraaWarehouse;
+--+----------------------------------------------------------------+
+--> PHASE 1: DATABASE CONTEXT ESTABLISHMENT
+--+----------------------------------------------------------------+
+
+PRINT 'BARAA WAREHOUSE - BRONZE LAYER INITIALIZATION' ;
+PRINT '======================================================' ;
+PRINT '' ;
+USE BaraaWarehouse ;
+PRINT '>>> Successfully switched to BaraaWarehouse database context.' ;
 GO
 
--- +-----------------------------------------------------------------------------+
--- | BRONZE DATA LOADING STORED PROCEDURE                                       |
--- +-----------------------------------------------------------------------------+
-
+--+----------------------------------------------------------------+
+--> PHASE 2: DEPLOYMENT DEFINITION
+--+----------------------------------------------------------------+
 CREATE OR ALTER PROCEDURE bronze.load_bronze
 AS
 BEGIN
-  -- ==========================================================================
-  -- VARIABLE DECLARATIONS AND INITIALIZATION
-  -- ==========================================================================
 
-  DECLARE @stage VARCHAR(100);
+--==================================================================
+-- VARIABLE DECLARATIONS AND INITIALIZATION
+--==================================================================
+
+DECLARE
+@stage VARCHAR(100);
   DECLARE @startTime DATETIME2, @endTime DATETIME2, @elapsedMs INT;
   DECLARE @totalStartTime DATETIME2 = SYSDATETIME();
   DECLARE @rowsAffected INT;
@@ -45,9 +52,9 @@ BEGIN
   BEGIN TRANSACTION LoadBronzeData;
 
   BEGIN TRY
-        -- ======================================================================
-        -- PROCEDURE INITIALIZATION
-        -- ======================================================================
+        --==================================================================
+        --> PROCEDURE INITIALIZATION
+        --==================================================================
 
         PRINT '';
         PRINT '*** BRONZE LAYER DATA LOADING INITIATED ***';
@@ -55,9 +62,9 @@ BEGIN
         PRINT CONCAT('    Execution started at: ', FORMAT(@totalStartTime, 'yyyy-MM-dd HH:mm:ss.fff'));
         PRINT '';
 
-        -- ======================================================================
-        -- ERROR FILE CLEANUP (PREVENT FILE EXISTS ERRORS)
-        -- ======================================================================
+        --==================================================================
+        --> ERROR FILE CLEANUP (PREVENT FILE EXISTS ERRORS)
+        --==================================================================
 
         PRINT 'INITIALIZATION: Cleaning up previous error files...';
         PRINT '';
@@ -66,11 +73,14 @@ BEGIN
         EXEC xp_cmdshell 'DEL /Q "D:\Projects\GitHub\CC\datum\logs\baraa_warehouse\*_errors.log" 2>NUL', NO_OUTPUT;
         EXEC xp_cmdshell 'DEL /Q "D:\Projects\GitHub\CC\datum\logs\baraa_warehouse\*.Error.Txt" 2>NUL', NO_OUTPUT;
 
-        -- ======================================================================
-        -- PHASE 1: CRM SYSTEM DATA INGESTION
-        -- ======================================================================
+--+----------------------------------------------------------------+
+--> PHASE 3: DATA INGESTION
+--+----------------------------------------------------------------+
+        --==================================================================
+        --> CUSTOMER DATA INGESTION
+        --==================================================================
 
-        PRINT 'PHASE 1: CRM SYSTEM DATA INGESTION';
+        PRINT 'PHASE 3.1: CUSTOMER DATA INGESTION';
         PRINT '-----------------------------------';
         PRINT '';
 
@@ -185,9 +195,9 @@ BEGIN
         PRINT CONCAT('        [SUCCESS] ', FORMAT(@rowsAffected, 'N0'), ' records loaded in ', @elapsedMs, ' ms');
         PRINT '';
 
-        -- ======================================================================
+        --==================================================================
         -- PHASE 2: ERP SYSTEM DATA INGESTION
-        -- ======================================================================
+        --==================================================================
 
         PRINT 'PHASE 2: ERP SYSTEM DATA INGESTION';
         PRINT '----------------------------------';
@@ -304,9 +314,9 @@ BEGIN
         PRINT CONCAT('        [SUCCESS] ', FORMAT(@rowsAffected, 'N0'), ' records loaded in ', @elapsedMs, ' ms');
         PRINT '';
 
-        -- ======================================================================
+        --==================================================================
         -- TRANSACTION COMMIT AND COMPLETION SUMMARY
-        -- ======================================================================
+        --==================================================================
 
         COMMIT TRANSACTION LoadBronzeData;
 
@@ -333,9 +343,9 @@ BEGIN
 
     END TRY
     BEGIN CATCH
-        -- ======================================================================
+        --==================================================================
         -- COMPREHENSIVE ERROR HANDLING
-        -- ======================================================================
+        --==================================================================
 
         ROLLBACK TRANSACTION LoadBronzeData;
 

@@ -1,0 +1,34 @@
+File Tree for Datum:
+
+├── Assets
+│   ├── design
+│   └── images
+├── Data
+│   ├── output
+│   ├── samples
+│   └── sources
+├── Documentation
+├── Environment
+│   └── containers
+│       ├── mssql.compose.yml
+│       └── mysql.compose.yml
+├── Logs
+├── Repositories
+│   ├── python
+│   │   ├── pyproject.toml
+│   │   └── workspace.toml
+│   ├── rust
+│   │   ├── Cargo.toml
+│   │   ├── libraries
+│   │   ├── projects
+│   │   ├── rust-analyzer.toml
+│   │   ├── rust-toolchain.toml
+│   │   └── rustfmt.toml
+│   └── sql
+├── .gitignore
+├── .sqruff
+├── LICENSE-APACHE
+├── LICENSE-MIT
+├── mise.toml
+├── treefmt.toml
+└── README.md

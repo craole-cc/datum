@@ -1,4 +1,4 @@
-# datum
+# DATUM: A Data-Driven Journey
 
 Welcome to **datum**—A unified lab for exploring, engineering, and analyzing data using both Python and Rust, version-controlled using `jj`. This repository serves as my personal portfolio and playground as I transition toward data engineering and architecture.
 
