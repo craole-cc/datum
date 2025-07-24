@@ -6,22 +6,22 @@ lockfile = true
 windows_shim_mode = "symlink"
 
 [tools]
-'bat' = 'latest'
-'deno' = 'latest'
-'eza' = 'latest'
-'cargo-binstall' = 'latest'
-'cargo:treefmt' = 'latest'
-# 'cargo:sqruff' = 'latest' # Installed locally since this is not working
-'docker-cli' = 'latest'
-'docker-compose' = 'latest'
-'docker-slim' = 'latest'
-'jujutsu' = 'latest'
-'ripgrep' = 'latest'
-'taplo' = 'latest'
-'tokei' = 'latest'
+# 'bat' = 'latest'
+# 'deno' = 'latest'
+# 'eza' = 'latest'
+# 'cargo-binstall' = 'latest'
+# 'cargo:treefmt' = 'latest'
+# # 'cargo:sqruff' = 'latest' # Installed locally since this is not working
+# 'docker-cli' = 'latest'
+# 'docker-compose' = 'latest'
+# 'docker-slim' = 'latest'
+# 'jujutsu' = 'latest'
+# 'ripgrep' = 'latest'
+# 'taplo' = 'latest'
+# 'tokei' = 'latest'
 'usage' = 'latest'
-'uv' = 'latest'
-'watchexec' = 'latest'
+# 'uv' = 'latest'
+# 'watchexec' = 'latest'
 
 [env]
 PRJ_ROOT = "{{config_root}}"

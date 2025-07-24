@@ -1,0 +1,15 @@
+[package]
+name = "cli"
+default-run = "cli"
+description = "Command line interface for datum"
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+keywords = ["cli", "command", "line", "interface"]
+
+[lints]
+workspace = true
+
+[dependencies]
+clap = { workspace = true }

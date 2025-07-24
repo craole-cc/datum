@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling", "hatch-polylith-bricks"]
+build-backend = "hatchling.build"
+
+[project]
+name = "my_example_project"
+version = "0.1.0"
+
+requires-python = ">=3.13"
+
+dependencies = [
+    "fastapi[standard]>=0.116.1",]
+
+[tool.hatch.build.hooks.polylith-bricks]
+"../../bases/datum/greet_fastapi" = "example/greet_api"
+
+
+[tool.polylith.bricks]
