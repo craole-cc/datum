@@ -28,25 +28,16 @@
 //! # }
 //! ```
 
-mod core;
-mod error;
-mod task;
+pub mod downloader;
+pub mod error;
+pub mod filename;
+pub mod preview;
+pub mod ui;
 
-pub use core::Downloader;
-pub use error::{Error, Result};
+pub use downloader::Downloader;
+pub use filename::FilenameExtractor;
+pub use preview::{DownloadPreview, PreviewGenerator};
+pub use ui::{ConsoleInterface, PreviewAction, UserInterface};
 
-#[macro_use]
-extern crate tracing;
-
-// pub mod downloader;
-// pub mod preview;
-// pub mod ui;
-// pub mod filename;
-
-// pub use downloader::Downloader;
-// pub use preview::{DownloadPreview, PreviewGenerator};
-// pub use ui::{PreviewAction, UserInterface, ConsoleInterface};
-// pub use filename::FilenameExtractor;
-
-// // Re-export common types
-// use crate::{Error, Result};
+// Re-export common types
+use crate::{Error, Result};

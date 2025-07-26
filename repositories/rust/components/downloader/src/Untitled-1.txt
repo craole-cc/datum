@@ -1,0 +1,532 @@
+components/downloader/src/downloader.rs:
+
+contents:
+use reqwest::Url;
+use std::sync::Arc;
+use tokio::fs::{create_dir_all as async_create_dir_all, remove_dir_all};
+use tracing::trace;
+
+use crate::task::{DownloadTask, TaskExecutor};
+use crate::{Error, Result};
+use std::path::{Path, PathBuf};
+
+/// A concurrent file downloader that downloads multiple files from URLs to a local directory.
+///
+/// The downloader supports:
+/// - Concurrent downloads with optional concurrency limiting
+/// - Atomic file operations (downloads to temp files, then atomically renames)
+/// - Automatic filename extraction from URLs
+/// - Comprehensive error handling and logging
+/// - Automatic directory creation
+///
+/// # Examples
+///
+/// ```rust,no_run
+/// use downloader::Downloader;
+///
+/// # #[tokio::main]
+/// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     let urls = vec![
+///         "https://example.com/file1.txt",
+///         "https://example.com/file2.pdf",
+///     ];
+///
+///     // Download with concurrency limit of 3
+///     let downloader = Downloader::new(urls.clone(), "/download/path", Some(3));
+///     downloader.start().await?;
+///
+///     // Download without concurrency limit
+///     let downloader = Downloader::new(urls, "/download/path", None);
+///     downloader.start().await?;
+///
+/// #   Ok(())
+/// # }
+/// ```
+#[derive(Debug)]
+pub struct Downloader {
+  /// The list of URLs to download from
+  pub urls: Vec<String>,
+
+  /// The directory to place the downloaded files
+  pub home: PathBuf,
+
+  /// Optional limit on the number of concurrent downloads.
+  /// If None, downloads will run with unlimited concurrency.
+  pub concurrency_limit: Option<usize>,
+}
+
+impl Downloader {
+  /// Creates a new Downloader instance.
+  ///
+  /// # Arguments
+  ///
+  /// * `urls` - A vector of URLs to download. Each URL should be a valid HTTP/HTTPS URL.
+  /// * `path` - The target directory where files will be saved.
+  /// * `concurrency_limit` - Optional limit on concurrent downloads. Use `None` for unlimited.
+  ///
+  /// # Examples
+  ///
+  /// ```rust
+  /// # use downloader::Downloader;
+  /// let urls = vec!["https://example.com/file.txt"];
+  /// let downloader = Downloader::new(urls, "/downloads", Some(5));
+  /// ```
+  pub fn new<S: AsRef<str>, P: AsRef<Path>>(
+    urls: Vec<S>,
+    path: P,
+    concurrency_limit: Option<usize>,
+  ) -> Self {
+    let urls = urls.into_iter().map(|s| s.as_ref().to_string()).collect();
+    let home = PathBuf::from(path.as_ref());
+    trace!(
+      "Creating new Downloader with source: {urls:?}, target: {home:#?} and concurrency limit: {concurrency_limit:?}",
+    );
+    Self {
+      urls,
+      home,
+      concurrency_limit,
+    }
+  }
+
+  /// Starts the download process for all configured URLs.
+  ///
+  /// This method:
+  /// 1. Creates the target directory if it doesn't exist
+  /// 2. Creates a temporary directory for atomic operations
+  /// 3. Downloads all files concurrently (respecting concurrency limits)
+  /// 4. Atomically moves completed downloads to their final locations
+  /// 5. Cleans up temporary files
+  ///
+  /// # Returns
+  ///
+  /// Returns `Ok(())` if all downloads succeed, or the first error encountered.
+  ///
+  /// # Errors
+  ///
+  /// This method can return several types of errors:
+  /// - `Error::InvalidURL` - If any URL cannot be parsed
+  /// - `Error::RequestFailed` - If any HTTP request fails
+  /// - `Error::WriteFailed` - If file system operations fail
+  /// - `Error::HttpError` - If the server returns a non-success status code
+  /// - `Error::TaskFailed` - If a download task panics or is cancelled
+  pub async fn start(&self) -> Result<()> {
+    trace!("Starting download process");
+
+    // Create the target directory if it doesn't exist
+    async_create_dir_all(&self.home).await?;
+
+    // Create temporary directory for downloads
+    let temp_dir = self.home.join(".tmp_downloads");
+    async_create_dir_all(&temp_dir).await?;
+
+    trace!("Created temporary directory: {:?}", temp_dir);
+
+    // Prepare download tasks
+    let mut tasks = Vec::new();
+
+    for (index, url_str) in self.urls.iter().enumerate() {
+      trace!("Processing URL {}: {}", index, url_str);
+
+      // Parse and validate URL
+      let url = Url::parse(url_str).map_err(|_| Error::invalid_url(url_str))?;
+
+      // Determine filename from URL (last path segment)
+      let filename = self.extract_filename(&url)?;
+      trace!("Extracted filename: {}", filename);
+
+      let temp_path = temp_dir.join(format!("{index}_{filename}"));
+      let final_path = self.home.join(&filename);
+
+      let download_task = DownloadTask::new(url, temp_path, final_path, index);
+      tasks.push(download_task);
+    }
+
+    // Execute downloads with concurrency control
+    let executor = TaskExecutor::new(self.concurrency_limit);
+    let results = executor.execute(tasks).await;
+
+    // Clean up temporary directory
+    trace!("Cleaning up temporary directory");
+    if let Err(e) = remove_dir_all(&temp_dir).await {
+      trace!("Warning: Failed to remove temp directory: {}", e);
+    }
+
+    // Check if all downloads succeeded
+    for result in results {
+      result?;
+    }
+
+    trace!("All downloads completed successfully");
+    Ok(())
+  }
+
+  /// Extracts a filename from a URL's path.
+  ///
+  /// This method looks at the last path segment of the URL and uses it as the filename.
+  /// If the URL has no path segments, or the last segment is empty, it defaults to "download".
+  /// If the filename has no extension, ".bin" is appended.
+  ///
+  /// # Arguments
+  ///
+  /// * `url` - The URL to extract the filename from
+  ///
+  /// # Returns
+  ///
+  /// Returns the extracted filename, or an error if the URL has no path segments.
+  ///
+  /// # Examples
+  ///
+  /// - `https://example.com/path/file.txt` → `"file.txt"`
+  /// - `https://example.com/data` → `"data.bin"`
+  /// - `https://example.com/` → `"download.bin"`
+  fn extract_filename(&self, url: &Url) -> Result<String> {
+    let mut path_segments = url
+      .path_segments()
+      .ok_or_else(|| Error::invalid_url(url.as_str()))?;
+
+    let filename = path_segments
+      .next_back()
+      .filter(|s| !s.is_empty())
+      .unwrap_or("download");
+
+    // If filename has no extension and looks like a generic name, add .bin
+    let filename = if filename == "download" || !filename.contains('.') {
+      format!("{filename}.bin")
+    } else {
+      filename.to_string()
+    };
+
+    Ok(filename)
+  }
+}
+
+============================
+
+components/downloader/src/error.rs:
+
+contents:
+//! Error types and utilities for the downloader crate.
+
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+  #[error("Invalid URL: {0}")]
+  InvalidURL(String),
+  #[error("Invalid path: {0}")]
+  InvalidPath(String),
+  #[error("Request failed: {0}")]
+  RequestFailed(#[from] reqwest::Error),
+  #[error("Write failed: {0}")]
+  WriteFailed(#[from] std::io::Error),
+  #[error("Task failed: {0}")]
+  TaskFailed(String),
+  #[error("HTTP error {status}: {url}")]
+  HttpError { status: u16, url: String },
+}
+
+impl Error {
+  /// Creates an invalid URL error.
+  pub fn invalid_url<S: AsRef<str>>(url: S) -> Self {
+    Self::InvalidURL(url.as_ref().to_string())
+  }
+
+  /// Creates an invalid path error.
+  pub fn invalid_path<S: AsRef<str>>(path: S) -> Self {
+    Self::InvalidPath(path.as_ref().to_string())
+  }
+
+  /// Creates an HTTP error with status code and URL.
+  pub fn http_error(status: u16, url: &str) -> Self {
+    Self::HttpError {
+      status,
+      url: url.to_string(),
+    }
+  }
+
+  /// Creates a task failed error.
+  pub fn task_failed<S: AsRef<str>>(msg: S) -> Self {
+    Self::TaskFailed(msg.as_ref().to_string())
+  }
+}
+
+impl From<tokio::task::JoinError> for Error {
+  fn from(err: tokio::task::JoinError) -> Self {
+    Self::TaskFailed(err.to_string())
+  }
+}
+
+/// A type alias for `Result<T, Error>`.
+pub type Result<T> = std::result::Result<T, Error>;
+
+============================
+
+components/downloader/src/lib.rs:
+
+contents:
+//! # Downloader
+//!
+//! A concurrent file downloader that downloads multiple files from URLs to a local directory.
+//!
+//! ## Features
+//!
+//! - Concurrent downloads with optional concurrency limiting
+//! - Atomic file operations (downloads to temp files, then atomically renames)
+//! - Automatic filename extraction from URLs
+//! - Comprehensive error handling and logging
+//! - Automatic directory creation
+//!
+//! ## Quick Start
+//!
+//! ```rust,no_run
+//! use downloader::Downloader;
+//!
+//! # #[tokio::main]
+//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//! let urls = vec![
+//!     "https://example.com/file1.txt",
+//!     "https://example.com/file2.pdf",
+//! ];
+//!
+//! let downloader = Downloader::new(urls, "/download/path", Some(3));
+//! downloader.start().await?;
+//! # Ok(())
+//! # }
+//! ```
+
+mod downloader;
+mod error;
+mod task;
+
+pub use downloader::Downloader;
+pub use error::{Error, Result};
+
+// pub mod downloader;
+// pub mod preview;
+// pub mod ui;
+// pub mod filename;
+
+// pub use downloader::Downloader;
+// pub use preview::{DownloadPreview, PreviewGenerator};
+// pub use ui::{PreviewAction, UserInterface, ConsoleInterface};
+// pub use filename::FilenameExtractor;
+
+// // Re-export common types
+// use crate::{Error, Result};
+
+============================
+
+components/downloader/src/task.rs:
+
+contents:
+use reqwest::Url;
+use std::sync::Arc;
+use tokio::fs::rename;
+use tokio::io::AsyncWriteExt;
+use tracing::trace;
+
+use crate::{Error, Result};
+use std::path::PathBuf;
+
+/// Represents a single download task with all necessary paths and metadata.
+///
+/// This struct contains all the information needed to download a single file:
+/// - The source URL
+/// - Temporary file path (for atomic operations)
+/// - Final destination path
+/// - Index for logging and identification
+#[derive(Debug)]
+pub struct DownloadTask {
+  /// The URL to download from
+  pub url: Url,
+  /// Temporary file path for atomic operations
+  pub temp_path: PathBuf,
+  /// Final destination path
+  pub final_path: PathBuf,
+  /// Task index for logging and identification
+  pub index: usize,
+}
+
+impl DownloadTask {
+  /// Creates a new download task.
+  pub fn new(
+    url: Url,
+    temp_path: PathBuf,
+    final_path: PathBuf,
+    index: usize,
+  ) -> Self {
+    Self {
+      url,
+      temp_path,
+      final_path,
+      index,
+    }
+  }
+
+  /// Downloads a single file from a URL to a temporary location, then atomically moves it.
+  ///
+  /// This method performs the actual download work:
+  /// 1. Makes HTTP GET request to the URL
+  /// 2. Checks for HTTP success status
+  /// 3. Downloads response body to bytes
+  /// 4. Writes bytes to temporary file
+  /// 5. Atomically renames temporary file to final destination
+  ///
+  /// The atomic rename ensures that partially downloaded files are never visible
+  /// in the final location, preventing corruption issues.
+  ///
+  /// # Returns
+  ///
+  /// Returns `Ok(())` on success, or an error if any step fails.
+  pub async fn execute(self) -> Result<()> {
+    trace!(
+      "Starting download {}: {} -> {:?}",
+      self.index, self.url, self.final_path
+    );
+
+    // Download the file
+    let response = reqwest::get(self.url.clone()).await?;
+
+    if !response.status().is_success() {
+      return Err(Error::http_error(
+        response.status().as_u16(),
+        self.url.as_str(),
+      ));
+    }
+
+    let bytes = response.bytes().await?;
+
+    trace!("Downloaded {} bytes for file {}", bytes.len(), self.index);
+
+    // Write to temporary file
+    let mut temp_file = tokio::fs::File::create(&self.temp_path).await?;
+
+    temp_file.write_all(&bytes).await?;
+    temp_file.flush().await?;
+
+    drop(temp_file); // Ensure file is closed before rename
+
+    trace!("Wrote temporary file: {:?}", self.temp_path);
+
+    // Atomic rename to final destination
+    rename(&self.temp_path, &self.final_path).await?;
+
+    trace!(
+      "Successfully moved to final location: {:?}",
+      self.final_path
+    );
+
+    Ok(())
+  }
+}
+
+/// Handles the execution of download tasks with optional concurrency control.
+pub struct TaskExecutor {
+  concurrency_limit: Option<usize>,
+}
+
+impl TaskExecutor {
+  /// Creates a new task executor.
+  ///
+  /// # Arguments
+  ///
+  /// * `concurrency_limit` - Optional limit on concurrent tasks. Use `None` for unlimited.
+  pub fn new(concurrency_limit: Option<usize>) -> Self {
+    Self { concurrency_limit }
+  }
+
+  /// Executes a vector of download tasks with concurrency control.
+  ///
+  /// # Arguments
+  ///
+  /// * `tasks` - Vector of download tasks to execute
+  ///
+  /// # Returns
+  ///
+  /// A vector of results, one for each download task.
+  pub async fn execute(&self, tasks: Vec<DownloadTask>) -> Vec<Result<()>> {
+    if let Some(limit) = self.concurrency_limit {
+      trace!("Using concurrency limit: {}", limit);
+      self.execute_with_semaphore(tasks, limit).await
+    } else {
+      trace!("Using unlimited concurrency");
+      self.execute_unlimited(tasks).await
+    }
+  }
+
+  /// Downloads files with a semaphore-based concurrency limit.
+  ///
+  /// This method creates a semaphore with the specified limit and ensures that
+  /// no more than `limit` downloads run simultaneously.
+  ///
+  /// # Arguments
+  ///
+  /// * `tasks` - Vector of download tasks to execute
+  /// * `limit` - Maximum number of concurrent downloads
+  ///
+  /// # Returns
+  ///
+  /// A vector of results, one for each download task.
+  async fn execute_with_semaphore(
+    &self,
+    tasks: Vec<DownloadTask>,
+    limit: usize,
+  ) -> Vec<Result<()>> {
+    use tokio::sync::Semaphore;
+
+    let semaphore = Arc::new(Semaphore::new(limit));
+    let mut handles = Vec::new();
+
+    for task in tasks {
+      let permit = semaphore.clone();
+      let handle = tokio::spawn(async move {
+        let _permit = permit.acquire().await.unwrap();
+        task.execute().await
+      });
+      handles.push(handle);
+    }
+
+    let mut results = Vec::new();
+    for handle in handles {
+      match handle.await {
+        Ok(result) => results.push(result),
+        Err(e) => results.push(Err(Error::from(e))),
+      }
+    }
+
+    results
+  }
+
+  /// Downloads files with unlimited concurrency.
+  ///
+  /// This method spawns all download tasks immediately without any concurrency control.
+  /// Use with caution for large numbers of URLs to avoid overwhelming the system or server.
+  ///
+  /// # Arguments
+  ///
+  /// * `tasks` - Vector of download tasks to execute
+  ///
+  /// # Returns
+  ///
+  /// A vector of results, one for each download task.
+  async fn execute_unlimited(
+    &self,
+    tasks: Vec<DownloadTask>,
+  ) -> Vec<Result<()>> {
+    let mut handles = Vec::new();
+
+    for task in tasks {
+      let handle = tokio::spawn(task.execute());
+      handles.push(handle);
+    }
+
+    let mut results = Vec::new();
+    for handle in handles {
+      match handle.await {
+        Ok(result) => results.push(result),
+        Err(e) => results.push(Err(Error::from(e))),
+      }
+    }
+
+    results
+  }
+}
+

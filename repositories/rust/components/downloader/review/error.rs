@@ -1,7 +1,5 @@
 //! Error types and utilities for the downloader crate.
 
-use std::{collections::HashMap, path::PathBuf};
-
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
   #[error("Invalid URL: {0}")]
@@ -16,8 +14,6 @@ pub enum Error {
   TaskFailed(String),
   #[error("HTTP error {status}: {url}")]
   HttpError { status: u16, url: String },
-  #[error("Files already exist: {0:?}")]
-  ExistingFiles(HashMap<String, PathBuf>),
 }
 
 impl Error {
@@ -42,11 +38,6 @@ impl Error {
   /// Creates a task failed error.
   pub fn task_failed<S: AsRef<str>>(msg: S) -> Self {
     Self::TaskFailed(msg.as_ref().to_string())
-  }
-
-  /// Creates an existing files error.
-  pub(crate) fn existing_files(files: HashMap<String, PathBuf>) -> Self {
-    Self::ExistingFiles(files)
   }
 }
 
