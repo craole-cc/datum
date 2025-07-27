@@ -1,9 +1,5 @@
-use crate::Datasets;
-use std::path::PathBuf;
-
-pub fn check(datasets: &Datasets) {
+pub fn check(datasets: &crate::Datasets) {
   println!("{datasets:#?} Checking");
-
 
   // Check only for the csv files
 }

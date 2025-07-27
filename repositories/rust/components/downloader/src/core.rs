@@ -1,307 +1,483 @@
-use crate::{
-  Error, Result,
-  task::{DownloadTask, TaskExecutor},
-};
-use reqwest::Url;
+//! Core downloader functionality with enhanced user experience
+//!
+//! This module provides the main `Downloader` struct with comprehensive
+//! configuration options, progress reporting, and user-friendly error handling.
+
+use crate::*;
 use std::{
   collections::HashMap,
   path::{Path, PathBuf},
   sync::Arc,
+  time::Duration
 };
-use tokio::fs::{create_dir_all as async_create_dir_all, remove_dir_all};
+use tokio::{
+  fs::{create_dir_all, remove_dir_all},
+  task::JoinHandle
+};
 
-/// A concurrent file downloader that downloads multiple files from URLs to a local directory.
-///
-/// The downloader supports:
-/// - Concurrent downloads with optional concurrency limiting
-/// - Atomic file operations (downloads to temp files, then atomically renames)
-/// - Automatic filename extraction from URLs
-/// - Comprehensive error handling and logging
-/// - Automatic directory creation
-///
-/// # Examples
-///
-/// ```rust,no_run
-/// use downloader::Downloader;
-///
-/// # #[tokio::main]
-/// # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-///     let urls = vec![
-///         "https://example.com/file1.txt",
-///         "https://example.com/file2.pdf",
-///     ];
-///
-///     // Download with concurrency limit of 3
-///     let mut downloader = Downloader::new(urls.clone(), "/download/path", Some(3));
-///     downloader.start(false).await?;
-///
-///     // Download without concurrency limit, forcing overwrites
-///     let mut downloader = Downloader::new(urls, "/download/path", None);
-///     downloader.start(true).await?;
-///
-/// #   Ok(())
-/// # }
-/// ```
 #[derive(Debug)]
 pub struct Downloader {
-  /// The list of URLs to download from
-  pub urls: Vec<String>,
+  /// URLs to download
+  urls: Vec<String>,
+  /// Target directory
+  target_dir: PathBuf,
+  /// Configuration settings
+  config: Config,
+  /// HTTP client with configured settings
+  client: ReqwestClient,
+  /// URL validator
+  validator: validation::UrlValidator,
+  /// Event sink for notifications
+  event_sink: Arc<dyn EventSink>,
+  /// Cached validation results
+  validated_urls: Option<Vec<validation::Url>>
+}
 
-  /// The directory to place the downloaded files
-  pub home: PathBuf,
-
-  /// Optional limit on the number of concurrent downloads.
-  /// If None, downloads will run with unlimited concurrency.
-  pub concurrency_limit: Option<usize>,
-
-  /// Indicates whether the target files already exist
-  /// None = not checked yet, Some(bool) = checked result
-  pub already_exists: Option<bool>,
+impl Default for Downloader {
+  fn default() -> Self {
+    Self {
+      urls: Vec::new(),
+      target_dir: PathBuf::new(),
+      config: Config::default(),
+      client: ReqwestClient::new(),
+      validator: validation::UrlValidator::default(),
+      event_sink: Arc::new(LoggingEventSink::default()),
+      validated_urls: None
+    }
+  }
 }
 
 impl Downloader {
-  /// Creates a new Downloader instance.
-  ///
-  /// # Arguments
-  ///
-  /// * `urls` - A vector of URLs to download. Each URL should be a valid HTTP/HTTPS URL.
-  /// * `path` - The target directory where files will be saved.
-  /// * `concurrency_limit` - Optional limit on concurrent downloads. Use `None` for unlimited.
-  ///
-  /// # Examples
-  ///
-  /// ```rust
-  /// # use downloader::Downloader;
-  /// let urls = vec!["https://example.com/file.txt"];
-  /// let downloader = Downloader::new(urls, "/downloads", Some(5));
-  /// ```
-  pub fn new<S: AsRef<str>, P: AsRef<Path>>(
+  pub fn new<S, P>(urls: Vec<S>, target_dir: P) -> Result<Self>
+  where
+    S: AsRef<str>,
+    P: AsRef<Path>
+  {
+    Ok(Self {
+      urls: urls.into_iter().map(|s| s.as_ref().to_string()).collect(),
+      target_dir: target_dir.as_ref().to_path_buf(),
+      ..Default::default()
+    })
+  }
+
+  pub fn new_with_config<S, P>(
     urls: Vec<S>,
-    path: P,
-    concurrency_limit: Option<usize>,
-  ) -> Self {
-    let urls: Vec<_> =
-      urls.into_iter().map(|s| s.as_ref().to_string()).collect();
-    let home = PathBuf::from(path.as_ref());
-    let downloader = Self {
-      urls,
-      home,
-      concurrency_limit,
-      already_exists: None, // Indicates "not checked yet"
-    };
-    info!("Initiated {downloader:#?}");
-    downloader
+    target_dir: P,
+    config: Config
+  ) -> Result<Self>
+  where
+    S: AsRef<str>,
+    P: AsRef<Path>
+  {
+    Ok(Self {
+      urls: urls.into_iter().map(|s| s.as_ref().to_string()).collect(),
+      target_dir: target_dir.as_ref().to_path_buf(),
+      config,
+      ..Default::default()
+    })
   }
 
-  /// Checks which target files already exist before downloading.
-  ///
-  /// Returns a HashMap of URLs and their corresponding target paths that already exist.
-  /// This allows the caller to decide whether to proceed with downloads or skip existing files.
-  ///
-  /// # Returns
-  ///
-  /// Returns `Ok(HashMap<String, PathBuf>)` containing URLs and paths of existing files.
-  ///
-  /// # Errors
-  ///
-  /// Returns `Error::InvalidURL` if any URL cannot be parsed.
-  pub async fn check_existing_files(
+  pub fn with_concurrency_limit(&mut self, limit: usize) -> &mut Self {
+    self.config.concurrency_limit = Some(limit);
+    self
+  }
+
+  pub fn with_timeout(&mut self, timeout: Duration) -> &mut Self {
+    self.config.timeout = timeout;
+    self
+  }
+
+  pub fn with_max_retries(&mut self, retries: usize) -> &mut Self {
+    self.config.max_retries = retries;
+    self
+  }
+
+  pub fn with_retry_delay(&mut self, delay: Duration) -> &mut Self {
+    self.config.retry_delay = delay;
+    self
+  }
+
+  pub fn with_overwrite_policy(
     &mut self,
-  ) -> Result<HashMap<String, PathBuf>> {
-    let mut existing = HashMap::new();
-
-    for url_str in &self.urls {
-      let url = Url::parse(url_str).map_err(|_| Error::invalid_url(url_str))?;
-      let filename = self.extract_filename(&url)?;
-      let target_path = self.home.join(&filename);
-
-      if target_path.exists() {
-        #[derive(Debug)]
-        struct ExistingDownloadTarget<'a> {
-          link: &'a str,
-          file: &'a Path,
-        }
-
-        warn!(
-          "{existing_file:#?}",
-          existing_file = ExistingDownloadTarget {
-            link: url.as_str(),
-            file: &target_path,
-          }
-        );
-        existing.insert(url_str.clone(), target_path);
-      }
-    }
-
-    // Set the cached result based on whether any files exist
-    self.already_exists = Some(!existing.is_empty());
-    Ok(existing)
+    policy: OverwritePolicy
+  ) -> &mut Self {
+    self.config.overwrite_policy = policy;
+    self
   }
 
-  /// Starts the download process for all configured URLs.
+  pub fn skip_existing(&mut self) -> &mut Self {
+    self.config.overwrite_policy = OverwritePolicy::Skip;
+    self
+  }
+
+  pub fn overwrite_existing(&mut self) -> &mut Self {
+    self.config.overwrite_policy = OverwritePolicy::Overwrite;
+    self
+  }
+
+  pub fn fail_on_existing(&mut self) -> &mut Self {
+    self.config.overwrite_policy = OverwritePolicy::Error;
+    self
+  }
+
+  pub fn rename_existing(&mut self) -> &mut Self {
+    self.config.overwrite_policy = OverwritePolicy::Rename;
+    self
+  }
+
+  pub fn with_filename_strategy(
+    &mut self,
+    strategy: filename::Strategy
+  ) -> &mut Self {
+    self.config.filename_strategy = strategy;
+    self
+  }
+
+  pub fn with_max_file_size(&mut self, size: Option<u64>) -> &mut Self {
+    self.config.max_file_size = size;
+    self
+  }
+
+  pub fn with_user_agent<S: Into<String>>(&mut self, agent: S) -> &mut Self {
+    self.config.user_agent = Some(agent.into());
+    self
+  }
+
+  pub fn with_max_redirects(&mut self, redirects: usize) -> &mut Self {
+    self.config.max_redirects = redirects;
+    self
+  }
+
+  pub fn with_fetch_metadata(&mut self, fetch: bool) -> &mut Self {
+    self.config.fetch_metadata = fetch;
+    self
+  }
+
+  pub fn with_progress_interval(&mut self, interval: Duration) -> &mut Self {
+    self.config.progress_interval = interval;
+    self
+  }
+
+  pub fn with_event_sink(&mut self, sink: Arc<dyn EventSink>) -> &mut Self {
+    self.config.event_sink = sink;
+    self
+  }
+
+  pub fn with_ssl_verification(&mut self, verify: bool) -> &mut Self {
+    self.config.verify_ssl = verify;
+    self
+  }
+
+  pub fn with_header<K: Into<String>, V: Into<String>>(
+    &mut self,
+    key: K,
+    value: V
+  ) -> &mut Self {
+    self.config.custom_headers.push((key.into(), value.into()));
+    self
+  }
+
+  pub fn with_headers<I, K, V>(&mut self, headers: I) -> &mut Self
+  where
+    I: IntoIterator<Item = (K, V)>,
+    K: Into<String>,
+    V: Into<String>
+  {
+    for (key, value) in headers {
+      self.config.custom_headers.push((key.into(), value.into()));
+    }
+    self
+  }
+
+  /// Validates all URLs and generates a preview of what will be downloaded.
   ///
-  /// This method:
-  /// 1. Optionally checks for existing files (unless force is true)
-  /// 2. Creates the target directory if it doesn't exist
-  /// 3. Creates a temporary directory for atomic operations
-  /// 4. Downloads all files concurrently (respecting concurrency limits)
-  /// 5. Atomically moves completed downloads to their final locations
-  /// 6. Cleans up temporary files
-  ///
-  /// # Arguments
-  ///
-  /// * `force` - If true, downloads will overwrite existing files without checking.
-  ///   If false, returns an error if any target files already exist.
+  /// This method performs URL validation, filename extraction, conflict
+  /// detection, and optionally fetches metadata like file sizes. It's useful
+  /// for showing users what will happen before starting the actual downloads.
   ///
   /// # Returns
   ///
-  /// Returns `Ok(())` if all downloads succeed, or the first error encountered.
-  ///
-  /// # Errors
-  ///
-  /// This method can return several types of errors:
-  /// - `Error::InvalidURL` - If any URL cannot be parsed
-  /// - `Error::RequestFailed` - If any HTTP request fails
-  /// - `Error::WriteFailed` - If file system operations fail
-  /// - `Error::HttpError` - If the server returns a non-success status code
-  /// - `Error::TaskFailed` - If a download task panics or is cancelled
-  /// - `Error::ExistingFiles` - If files exist and force is false
-  pub async fn start(&mut self, force: bool) -> Result<()> {
-    trace!("Starting download process with force={}", force);
+  /// Returns a `preview::Manifest` containing detailed information about each
+  /// file, potential conflicts, and warnings.
+  pub async fn preview(&mut self) -> Result<preview::Manifest> {
+    trace!("Generating download preview for {} URLs", self.urls.len());
 
-    // Check for existing files if not forcing overwrites
-    if !force {
-      // Only check if we haven't already checked, or if we need to recheck
-      let existing = if self.already_exists.is_none() {
-        // Haven't checked yet, so check now
-        self.check_existing_files().await?
-      } else if self.already_exists == Some(true) {
-        // We know files exist, but get the specific mapping
-        // This is a bit inefficient, but ensures consistency
-        self.check_existing_files().await?
+    self
+      .event_sink
+      .on_event(DownloadEvent::PreviewStarted {
+        url_count: self.urls.len()
+      })
+      .await;
+
+    let validated_urls = self.validate_urls().await?;
+    self.validated_urls = Some(validated_urls.clone());
+
+    let mut files = Vec::new();
+    let mut total_size = Some(0u64);
+    let mut conflicts = HashMap::<String, Vec<String>>::new();
+    let mut warnings = Vec::new();
+
+    // Process each validated URL
+    for validated in &validated_urls {
+      let estimated_size = if self.config.fetch_metadata {
+        utils::fetch_content_length(&self.client, &validated.parsed).await
       } else {
-        // We know no files exist, so return empty map
-        HashMap::new()
+        None
       };
 
-      if !existing.is_empty() {
-        return Err(Error::existing_files(existing));
+      // Update total size calculation
+      if let (Some(total), Some(size)) = (total_size.as_mut(), estimated_size) {
+        *total += size;
+      } else if estimated_size.is_some() {
+        total_size = None; // Can't calculate total if any size is unknown
       }
-    } else {
-      trace!("Force mode enabled - will overwrite existing files");
+
+      let status = preview::Status::new(
+        self.config.max_file_size,
+        validated,
+        estimated_size
+      )
+      .await;
+
+      // Check for filename conflicts
+      conflicts
+        .entry(validated.filename.clone())
+        .or_default()
+        .push(validated.original.clone());
+
+      files.push(preview::Target {
+        url: validated.original.clone(),
+        filename: validated.filename.clone(),
+        target_path: validated.target_path.clone(),
+        estimated_size,
+        status
+      });
     }
 
-    // Validate all URLs before starting downloads
-    trace!("Validating {} URLs", self.urls.len());
-    for (index, url_str) in self.urls.iter().enumerate() {
-      Url::parse(url_str)
-        .map_err(|_| Error::invalid_url(url_str))
-        .map(|_| debug!("URL {} validated: {}", index, url_str))?;
+    // Convert conflicts map to conflict list
+    let conflicts: Vec<preview::Conflict> = conflicts
+      .into_iter()
+      .filter(|(_, urls)| urls.len() > 1)
+      .map(|(filename, urls)| preview::Conflict { filename, urls })
+      .collect();
+
+    // Generate warnings
+    if !conflicts.is_empty() {
+      warnings.push(format!("{} filename conflicts detected", conflicts.len()));
     }
 
-    // Create the target directory if it doesn't exist
-    trace!("Creating target directory: {:?}", self.home);
-    async_create_dir_all(&self.home).await.map_err(|e| {
-      trace!("Failed to create target directory: {}", e);
-      Error::WriteFailed(e)
-    })?;
-
-    // Create temporary directory for downloads
-    let temp_dir = self.home.join(".tmp_downloads");
-    trace!("Creating temporary directory: {:?}", temp_dir);
-    async_create_dir_all(&temp_dir).await.map_err(|e| {
-      trace!("Failed to create temp directory: {}", e);
-      Error::WriteFailed(e)
-    })?;
-
-    // Prepare download tasks
-    let mut tasks = Vec::with_capacity(self.urls.len());
-    trace!("Preparing {} download tasks", self.urls.len());
-
-    for (index, url_str) in self.urls.iter().enumerate() {
-      // We already validated URLs above, so this should not fail
-      let url = Url::parse(url_str).map_err(|_| Error::invalid_url(url_str))?;
-      let filename = self.extract_filename(&url)?;
-
-      let temp_path = temp_dir.join(format!("{index}_{filename}"));
-      let final_path = self.home.join(&filename);
-
-      debug!("Task {}: {} -> {:?}", index, url_str, final_path);
-
-      let download_task = DownloadTask::new(url, temp_path, final_path, index);
-      tasks.push(download_task);
+    let existing_count = files
+      .iter()
+      .filter(|f| matches!(f.status, preview::Status::Exists))
+      .count();
+    if existing_count > 0 {
+      warnings.push(format!("{existing_count} files already exist"));
     }
 
-    // Execute downloads with concurrency control
-    trace!(
-      "Starting downloads with concurrency limit: {:?}",
-      self.concurrency_limit
+    let preview = preview::Manifest {
+      files,
+      total_size,
+      conflicts,
+      warnings
+    };
+
+    debug!("{preview:#?}");
+    info!(
+      "Preview generated: {} files ({}), {} conflicts, {} warnings",
+      preview.files.len(),
+      preview.estimated_size(),
+      preview.conflicts.len(),
+      preview.warnings.len()
     );
-    let executor = TaskExecutor::new(self.concurrency_limit);
-    let results = executor.execute(tasks).await;
 
-    // Clean up temporary directory
-    trace!("Cleaning up temporary directory: {:?}", temp_dir);
-    if let Err(e) = remove_dir_all(&temp_dir).await {
-      error!("Warning: Failed to remove temp directory: {}", e);
-      // Don't fail the entire operation for cleanup issues
-    }
+    self
+      .event_sink
+      .on_event(DownloadEvent::PreviewCompleted {
+        file_count: preview.files.len(),
+        total_size: preview.total_size,
+        conflicts: preview.conflicts.len()
+      })
+      .await;
 
-    // Check results - return first error encountered
-    let mut success_count = 0;
-    for (index, result) in results.into_iter().enumerate() {
-      match result {
-        Ok(_) => {
-          success_count += 1;
-          info!("Download {} completed successfully", index);
-        }
-        Err(e) => {
-          error!("Download {} failed: {}", index, e);
-          return Err(e);
-        }
-      }
-    }
-
-    info!("All {} downloads completed successfully", success_count);
-    Ok(())
+    Ok(preview)
   }
 
-  /// Extracts a filename from a URL's path.
+  /// Starts the download process with progress reporting.
   ///
-  /// This method looks at the last path segment of the URL and uses it as the filename.
-  /// If the URL has no path segments, or the last segment is empty, it defaults to "download".
-  /// If the filename has no extension, ".bin" is appended.
-  ///
-  /// # Arguments
-  ///
-  /// * `url` - The URL to extract the filename from
+  /// This method validates URLs (if not already done), handles existing files
+  /// according to the overwrite policy, and starts concurrent downloads with
+  /// progress reporting.
   ///
   /// # Returns
   ///
-  /// Returns the extracted filename, or an error if the URL has no path segments.
+  /// Returns a `Reporter` that provides real-time updates on download
+  /// progress.
   ///
-  /// # Examples
+  /// # Errors
   ///
-  /// - `https://example.com/path/file.txt` → `"file.txt"`
-  /// - `https://example.com/data` → `"data.bin"`
-  /// - `https://example.com/` → `"download.bin"`
-  fn extract_filename(&self, url: &Url) -> Result<String> {
-    let mut path_segments = url
-      .path_segments()
-      .ok_or_else(|| Error::invalid_url(url.as_str()))?;
+  /// Returns the first error encountered during the download process.
+  pub async fn start(&mut self) -> Result<progress::Reporter> {
+    info!("Starting download process");
 
-    let filename = path_segments
-      .next_back()
-      .filter(|s| !s.is_empty())
-      .unwrap_or("download");
+    self
+      .event_sink
+      .on_event(DownloadEvent::DownloadStarted {
+        url_count: self.urls.len()
+      })
+      .await;
 
-    // If filename has no extension and looks like a generic name, add .bin
-    let filename = if filename == "download" || !filename.contains('.') {
-      format!("{filename}.bin")
-    } else {
-      filename.to_string()
+    // Validate URLs if not already done
+    let validated_urls = match &self.validated_urls {
+      Some(urls) => urls.clone(),
+      None => {
+        let urls = self.validate_urls().await?;
+        self.validated_urls = Some(urls.clone());
+        urls
+      }
     };
 
-    Ok(filename)
+    // Handle existing files according to policy
+    let urls_to_download = self.handle_existing_files(validated_urls).await?;
+
+    if urls_to_download.is_empty() {
+      warn!("No files to download after handling existing files");
+      return Ok(progress::Reporter::completed());
+    }
+
+    // Ensure target directory exists
+    create_dir_all(&self.target_dir)
+      .await
+      .map_err(|e| Error::FileSystem {
+        message: format!("Failed to create target directory: {e}")
+      })?;
+
+    // Create temporary directory for atomic operations
+    let temp_dir = self.target_dir.join(".tmp_downloads");
+    create_dir_all(&temp_dir)
+      .await
+      .map_err(|e| Error::FileSystem {
+        message: format!("Failed to create temp directory: {e}")
+      })?;
+
+    // Create progress reporter
+    let progress_reporter = progress::Reporter::new(urls_to_download.len());
+    let progress_tx = progress_reporter.sender();
+
+    // Prepare download tasks
+    let mut tasks = Vec::new();
+    for (index, validated_url) in urls_to_download.into_iter().enumerate() {
+      let temp_path =
+        temp_dir.join(format!("{}_{}", index, validated_url.filename));
+
+      let task = DownloadTask {
+        url: validated_url.parsed,
+        temp_path,
+        final_path: validated_url.target_path,
+        index,
+        client: self.client.clone(),
+        config: self.config.clone(),
+        progress_tx: progress_tx.clone(),
+        event_sink: self.event_sink.clone()
+      };
+
+      tasks.push(task);
+    }
+
+    // Execute downloads directly (no background spawn)
+    let executor = TaskExecutor::new(self.config.concurrency_limit);
+
+    warn!("Before results");
+    let results = executor.execute(tasks).await;
+    warn!("After results");
+
+    // Clean up temporary directory
+    if let Err(e) = remove_dir_all(&temp_dir).await {
+      error!("Failed to clean up temp directory: {}", e);
+    }
+
+    // Process results and send final event
+    let mut success_count = 0;
+    let mut failed_urls = Vec::new();
+    for (index, result) in results.into_iter().enumerate() {
+      match result {
+        Ok(_) => success_count += 1,
+        Err(e) => {
+          error!("Download {} failed: {}", index, e);
+          failed_urls.push(format!("Task {index}: {e}"));
+        }
+      }
+    }
+
+    self
+      .event_sink
+      .on_event(DownloadEvent::DownloadCompleted {
+        successful: success_count,
+        failed: failed_urls.len(),
+        errors: failed_urls
+      })
+      .await;
+
+    // Return the progress_reporter so it stays alive
+    Ok(progress_reporter)
+  }
+
+  /// Validates and prepares all URLs for downloading.
+  async fn validate_urls(&self) -> Result<Vec<validation::Url>> {
+    validation::Url::new(
+      self.urls.clone(),
+      &self.target_dir,
+      &self.config.filename_strategy,
+      self.validator.clone()
+    )
+    .await
+  }
+
+  /// Handles existing files according to the configured overwrite policy.
+  async fn handle_existing_files(
+    &self,
+    validated_urls: Vec<validation::Url>
+  ) -> Result<Vec<validation::Url>> {
+    let mut to_download = Vec::new();
+    let mut existing_files = Vec::new();
+
+    for validated in validated_urls {
+      if validated.exists {
+        existing_files.push(validated.clone());
+      }
+
+      match self.config.overwrite_policy {
+        OverwritePolicy::Skip =>
+          if !validated.exists {
+            to_download.push(validated);
+          },
+        OverwritePolicy::Overwrite => {
+          to_download.push(validated);
+        }
+        OverwritePolicy::Error => {
+          if validated.exists {
+            return Err(Error::FileExists(validated.target_path));
+          }
+          to_download.push(validated);
+        }
+        OverwritePolicy::Rename => {
+          //TODO: Implement logic for auto-renaming
+          to_download.push(validated);
+        }
+      }
+    }
+
+    if !existing_files.is_empty() {
+      match self.config.overwrite_policy {
+        crate::config::OverwritePolicy::Skip => {
+          info!("Skipping {} existing files", existing_files.len());
+        }
+        crate::config::OverwritePolicy::Overwrite => {
+          warn!("Will overwrite {} existing files", existing_files.len());
+        }
+        _ => {}
+      }
+    }
+
+    Ok(to_download)
   }
 }

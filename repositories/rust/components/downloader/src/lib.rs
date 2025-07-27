@@ -1,52 +1,54 @@
-//! # Downloader
-//!
-//! A concurrent file downloader that downloads multiple files from URLs to a local directory.
-//!
-//! ## Features
-//!
-//! - Concurrent downloads with optional concurrency limiting
-//! - Atomic file operations (downloads to temp files, then atomically renames)
-//! - Automatic filename extraction from URLs
-//! - Comprehensive error handling and logging
-//! - Automatic directory creation
-//!
-//! ## Quick Start
-//!
-//! ```rust,no_run
-//! use downloader::Downloader;
-//!
-//! # #[tokio::main]
-//! # async fn main() -> Result<(), Box<dyn std::error::Error>> {
-//! let urls = vec![
-//!     "https://example.com/file1.txt",
-//!     "https://example.com/file2.pdf",
-//! ];
-//!
-//! let downloader = Downloader::new(urls, "/download/path", Some(3));
-//! downloader.start().await?;
-//! # Ok(())
-//! # }
-//! ```
+/// Library version information
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+// Internal modules
+mod config;
 mod core;
 mod error;
+mod events;
+mod filename;
+mod preview;
+mod progress;
 mod task;
+mod utils;
+mod validation;
 
-pub use core::Downloader;
-pub use error::{Error, Result};
+// External dependencies that are part of the public API
+pub use reqwest::{Client as ReqwestClient, Url as ReqwestUrl};
+pub use tokio::sync::broadcast;
 
+// Logging support
 #[macro_use]
 extern crate tracing;
 
-// pub mod downloader;
-// pub mod preview;
-// pub mod ui;
-// pub mod filename;
+// Re-export main types for convenience
+pub use crate::{
+  config::{Config, ConfigBuilder, OverwritePolicy},
+  core::Downloader,
+  error::{Error, ErrorKind, Result},
+  events::{
+    CollectingEventSink, CompositeEventSink, DownloadEvent, EventSink,
+    LoggingEventSink
+  },
+  filename::{ConflictResolver, ConflictStrategy, Strategy},
+  preview::{Conflict, Manifest, Status, Target},
+  progress::{Reporter, Sender, Snapshot},
+  task::{DownloadTask, TaskExecutor, TaskResult},
+  utils::{download, download_with_config, format_filesize},
+  validation::{Url, UrlValidator, UrlValidatorBuilder}
+};
+pub use std::{path::PathBuf, time::Duration};
 
-// pub use downloader::Downloader;
-// pub use preview::{DownloadPreview, PreviewGenerator};
-// pub use ui::{PreviewAction, UserInterface, ConsoleInterface};
-// pub use filename::FilenameExtractor;
-
-// // Re-export common types
-// use crate::{Error, Result};
+mod prelude {
+  pub use crate::{
+    ConflictStrategy, DownloadEvent, Error, ErrorKind, EventSink,
+    LoggingEventSink, OverwritePolicy, Result,
+    config::Config,
+    core::Downloader,
+    filename::Strategy,
+    preview::{Conflict, Manifest, Status, Target},
+    progress::{Reporter, Sender, Snapshot},
+    utils::{download, download_with_config},
+    validation::UrlValidator
+  };
+}

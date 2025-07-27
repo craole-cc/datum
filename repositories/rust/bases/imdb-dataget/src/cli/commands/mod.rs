@@ -22,5 +22,5 @@ pub enum Commands {
   /// Remove extracted files to prepare for import
   Clean {},
   /// Reset data, remove all downloads and extracted files
-  Reset {},
+  Reset {}
 }

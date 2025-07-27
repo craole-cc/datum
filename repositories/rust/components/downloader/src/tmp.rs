@@ -3,7 +3,13 @@
 //! This module provides robust download task execution with comprehensive
 //! error handling, retry mechanisms, and detailed progress reporting.
 
-use crate::*;
+use crate::{
+  config::DownloaderConfig,
+  error::{Error, Result},
+  events::{DownloadEvent, EventSink},
+  progress::ProgressSender
+};
+use reqwest::{Client, Response, Url};
 use std::{
   path::PathBuf,
   sync::Arc,
@@ -15,16 +21,17 @@ use tokio::{
   sync::Semaphore,
   time::sleep
 };
+use tracing::{debug, error, info, trace, warn};
 
 /// Represents a single download task with comprehensive metadata and
 /// capabilities.
 ///
 /// This enhanced version includes retry logic, progress reporting, and
 /// detailed error handling compared to the original simple version.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct DownloadTask {
   /// The URL to download from
-  pub url: reqwest::Url,
+  pub url: Url,
   /// Temporary file path for atomic operations
   pub temp_path: PathBuf,
   /// Final destination path
@@ -32,21 +39,61 @@ pub struct DownloadTask {
   /// Task index for identification and logging
   pub index: usize,
   /// HTTP client with configured settings
-  pub client: reqwest::Client,
+  pub client: Client,
   /// Configuration settings
-  pub config: crate::Config,
+  pub config: DownloaderConfig,
   /// Progress reporter
-  pub progress_tx: progress::Sender,
+  pub progress_tx: ProgressSender,
   /// Event sink for notifications
   pub event_sink: Arc<dyn EventSink>
 }
 
+/// Statistics about a completed download task.
+#[derive(Debug, Clone)]
+pub struct TaskResult {
+  /// Task index
+  pub index: usize,
+  /// Final file path
+  pub path: PathBuf,
+  /// Number of bytes downloaded
+  pub bytes_downloaded: u64,
+  /// Time taken to complete the download
+  pub duration: Duration,
+  /// Number of retry attempts made
+  pub retry_count: usize,
+  /// Final download speed in bytes per second
+  pub final_speed: f64
+}
+
 impl DownloadTask {
+  /// Creates a new enhanced download task.
+  pub fn new(
+    url: Url,
+    temp_path: PathBuf,
+    final_path: PathBuf,
+    index: usize,
+    client: Client,
+    config: DownloaderConfig,
+    progress_tx: ProgressSender,
+    event_sink: Arc<dyn EventSink>
+  ) -> Self {
+    Self {
+      url,
+      temp_path,
+      final_path,
+      index,
+      client,
+      config,
+      progress_tx,
+      event_sink
+    }
+  }
+
   /// Executes the download task with retry logic and progress reporting.
   ///
   /// This method handles the complete download lifecycle:
   /// 1. Makes HTTP request with custom headers
-  /// 2. Validates response and file size limits
+  /// 2. 0ates response and file size limits
   /// 3. Downloads with progress reporting
   /// 4. Handles errors and retries automatically
   /// 5. Atomically moves file to final location
@@ -94,9 +141,10 @@ impl DownloadTask {
 
           // Atomically move to final location
           if let Err(e) = rename(&self.temp_path, &self.final_path).await {
-            let error = Error::FileSystem {
-              message: format!("Failed to move file to final location: {e}")
-            };
+            let error = Error::IoError(format!(
+              "Failed to move file to final location: {}",
+              e
+            ));
 
             self
               .event_sink
@@ -185,9 +233,8 @@ impl DownloadTask {
     }
 
     // All retries exhausted
-    let final_error = last_error.unwrap_or_else(|| Error::TaskFailed {
-      index: self.index,
-      reason: "Unknown error after retries".to_string()
+    let final_error = last_error.unwrap_or_else(|| {
+      Error::TaskFailed("Unknown error after retries".to_string())
     });
 
     self.progress_tx.failed(self.index, final_error.to_string());
@@ -217,17 +264,13 @@ impl DownloadTask {
     }
 
     // Make the HTTP request
-    let response = request.send().await.map_err(|e| Error::RequestFailed {
-      url: self.url.to_string(),
-      source: e
-    })?;
+    let response = request.send().await.map_err(|e| Error::RequestFailed(e))?;
 
     // Check response status
     if !response.status().is_success() {
-      return Err(Error::HttpStatus {
+      return Err(Error::HttpError {
         status: response.status().as_u16(),
-        url: self.url.to_string(),
-        message: "Failed to download file".to_string()
+        url: self.url.to_string()
       });
     }
 
@@ -235,12 +278,13 @@ impl DownloadTask {
     let content_length = response.content_length();
     if let (Some(max_size), Some(content_len)) =
       (self.config.max_file_size, content_length)
-      && content_len > max_size
     {
-      return Err(Error::FileTooLarge {
-        size: content_len,
-        max_size
-      });
+      if content_len > max_size {
+        return Err(Error::FileTooLarge {
+          size: content_len,
+          max_size
+        });
+      }
     }
 
     debug!(
@@ -253,40 +297,29 @@ impl DownloadTask {
   }
 
   /// Downloads response body with progress reporting.
-  // In your DownloadTask::download_with_progress method, handle closed channels
-  // gracefully:
   async fn download_with_progress(
     &self,
-    response: reqwest::Response,
+    response: Response,
     content_length: Option<u64>
   ) -> Result<u64> {
     use tokio_stream::StreamExt;
 
     // Create temporary file
-    let mut temp_file =
-      File::create(&self.temp_path)
-        .await
-        .map_err(|e| Error::FileSystem {
-          message: format!("Failed to create temp file: {e}")
-        })?;
+    let mut temp_file = File::create(&self.temp_path).await.map_err(|e| {
+      Error::IoError(format!("Failed to create temp file: {}", e))
+    })?;
 
     let mut stream = response.bytes_stream();
     let mut bytes_downloaded = 0u64;
     let mut last_progress_report = Instant::now();
 
     while let Some(chunk_result) = stream.next().await {
-      let chunk = chunk_result.map_err(|e| Error::RequestFailed {
-        url: self.url.to_string(),
-        source: e
-      })?;
+      let chunk = chunk_result.map_err(|e| Error::RequestFailed(e))?;
 
       // Write chunk to file
-      temp_file
-        .write_all(&chunk)
-        .await
-        .map_err(|e| Error::FileSystem {
-          message: format!("Failed to write to temp file: {e}")
-        })?;
+      temp_file.write_all(&chunk).await.map_err(|e| {
+        Error::IoError(format!("Failed to write to temp file: {}", e))
+      })?;
 
       bytes_downloaded += chunk.len() as u64;
 
@@ -301,14 +334,12 @@ impl DownloadTask {
           0.0
         };
 
-        // Send progress update
         self.progress_tx.progress(
           self.index,
           bytes_downloaded as usize,
           content_length.map(|c| c as usize)
         );
 
-        // FIXED: Handle closed event sink gracefully
         self
           .event_sink
           .on_event(DownloadEvent::FileProgress {
@@ -323,19 +354,19 @@ impl DownloadTask {
       }
 
       // Check file size limit during download
-      if let Some(max_size) = self.config.max_file_size
-        && bytes_downloaded > max_size
-      {
-        return Err(Error::FileTooLarge {
-          size: bytes_downloaded,
-          max_size
-        });
+      if let Some(max_size) = self.config.max_file_size {
+        if bytes_downloaded > max_size {
+          return Err(Error::FileTooLarge {
+            size: bytes_downloaded,
+            max_size
+          });
+        }
       }
     }
 
     // Ensure all data is written to disk
-    temp_file.flush().await.map_err(|e| Error::FileSystem {
-      message: format!("Failed to flush temp file: {e}")
+    temp_file.flush().await.map_err(|e| {
+      Error::IoError(format!("Failed to flush temp file: {}", e))
     })?;
 
     drop(temp_file); // Close file handle
@@ -347,113 +378,6 @@ impl DownloadTask {
 
     Ok(bytes_downloaded)
   }
-  // async fn download_with_progress(
-  //   &self,
-  //   response: reqwest::Response,
-  //   content_length: Option<u64>
-  // ) -> Result<u64> {
-  //   use tokio_stream::StreamExt;
-
-  //   // Create temporary file
-  //   let mut temp_file =
-  //     File::create(&self.temp_path)
-  //       .await
-  //       .map_err(|e| Error::FileSystem {
-  //         message: format!("Failed to create temp file: {e}")
-  //       })?;
-
-  //   let mut stream = response.bytes_stream();
-  //   let mut bytes_downloaded = 0u64;
-  //   let mut last_progress_report = Instant::now();
-
-  //   while let Some(chunk_result) = stream.next().await {
-  //     let chunk = chunk_result.map_err(|e| Error::RequestFailed {
-  //       url: self.url.to_string(),
-  //       source: e
-  //     })?;
-
-  //     // Write chunk to file
-  //     temp_file
-  //       .write_all(&chunk)
-  //       .await
-  //       .map_err(|e| Error::FileSystem {
-  //         message: format!("Failed to write to temp file: {e}")
-  //       })?;
-
-  //     bytes_downloaded += chunk.len() as u64;
-
-  //     // Report progress periodically
-  //     let now = Instant::now();
-  //     if now.duration_since(last_progress_report)
-  //       >= self.config.progress_interval
-  //     {
-  //       let percentage = if let Some(total) = content_length {
-  //         (bytes_downloaded as f64 / total as f64) * 100.0
-  //       } else {
-  //         0.0
-  //       };
-
-  //       self.progress_tx.progress(
-  //         self.index,
-  //         bytes_downloaded as usize,
-  //         content_length.map(|c| c as usize)
-  //       );
-
-  //       self
-  //         .event_sink
-  //         .on_event(DownloadEvent::FileProgress {
-  //           index: self.index,
-  //           bytes_downloaded,
-  //           total_bytes: content_length,
-  //           percentage
-  //         })
-  //         .await;
-
-  //       last_progress_report = now;
-  //     }
-
-  //     // Check file size limit during download
-  //     if let Some(max_size) = self.config.max_file_size
-  //       && bytes_downloaded > max_size
-  //     {
-  //       return Err(Error::FileTooLarge {
-  //         size: bytes_downloaded,
-  //         max_size
-  //       });
-  //     }
-  //   }
-
-  //   // Ensure all data is written to disk
-  //   temp_file.flush().await.map_err(|e| Error::FileSystem {
-  //     message: format!("Failed to flush temp file: {e}")
-  //   })?;
-
-  //   drop(temp_file); // Close file handle
-
-  //   trace!(
-  //     "Task {}: Downloaded {} bytes to {:?}",
-  //     self.index, bytes_downloaded, self.temp_path
-  //   );
-
-  //   Ok(bytes_downloaded)
-  // }
-}
-
-/// Statistics about a completed download task.
-#[derive(Debug, Clone)]
-pub struct TaskResult {
-  /// Task index
-  pub index: usize,
-  /// Final file path
-  pub path: PathBuf,
-  /// Number of bytes downloaded
-  pub bytes_downloaded: u64,
-  /// Time taken to complete the download
-  pub duration: Duration,
-  /// Number of retry attempts made
-  pub retry_count: usize,
-  /// Final download speed in bytes per second
-  pub final_speed: f64
 }
 
 /// Executes download tasks with configurable concurrency control.
@@ -510,7 +434,7 @@ impl TaskExecutor {
     }
   }
 
-  // Fix for execute_with_semaphore method:
+  /// Executes tasks with semaphore-based concurrency control.
   async fn execute_with_semaphore(
     &self,
     tasks: Vec<DownloadTask>,
@@ -519,7 +443,7 @@ impl TaskExecutor {
     let semaphore = Arc::new(Semaphore::new(limit));
     let mut handles = Vec::with_capacity(tasks.len());
 
-    debug!(
+    trace!(
       "Using semaphore with {} permits for {} tasks",
       limit,
       tasks.len()
@@ -529,27 +453,27 @@ impl TaskExecutor {
       let permit = semaphore.clone();
       let handle = tokio::spawn(async move {
         let _permit = permit.acquire().await.unwrap();
-        let task_index = task.index; // ✅ Store index before moving task
-        debug!("Task {} acquired semaphore permit", task_index);
+        debug!("Task {} acquired semaphore permit", task.index);
         let result = task.execute().await;
-        debug!("Task {} released semaphore permit", task_index); // ✅ Use stored index
+        debug!(
+          "Task {} released semaphore permit",
+          result.as_ref().map(|r| r.index).unwrap_or(0)
+        );
         result
       });
       handles.push(handle);
     }
 
     let mut results = Vec::with_capacity(handles.len());
-
-    // Remove problematic warn! statements
     for (index, handle) in handles.into_iter().enumerate() {
       match handle.await {
         Ok(task_result) => results.push(task_result),
         Err(join_error) => {
           error!("Task {} panicked: {}", index, join_error);
-          results.push(Err(Error::TaskFailed {
-            index,
-            reason: join_error.to_string()
-          }));
+          results.push(Err(Error::TaskFailed(format!(
+            "Task panicked: {}",
+            join_error
+          ))));
         }
       }
     }
@@ -557,19 +481,17 @@ impl TaskExecutor {
     results
   }
 
-  // Fix for execute_unlimited method:
+  /// Executes tasks with unlimited concurrency.
   async fn execute_unlimited(
     &self,
     tasks: Vec<DownloadTask>
   ) -> Vec<Result<TaskResult>> {
     let mut handles = Vec::with_capacity(tasks.len());
 
-    debug!("Executing {} tasks with unlimited concurrency", tasks.len());
+    warn!("Executing {} tasks with unlimited concurrency", tasks.len());
 
     for task in tasks {
-      let handle = tokio::spawn(async move {
-        task.execute().await // ✅ Simple - no need to access task after this
-      });
+      let handle = tokio::spawn(async move { task.execute().await });
       handles.push(handle);
     }
 
@@ -579,10 +501,10 @@ impl TaskExecutor {
         Ok(task_result) => results.push(task_result),
         Err(join_error) => {
           error!("Task {} panicked: {}", index, join_error);
-          results.push(Err(Error::TaskFailed {
-            index,
-            reason: join_error.to_string()
-          }));
+          results.push(Err(Error::TaskFailed(format!(
+            "Task panicked: {}",
+            join_error
+          ))));
         }
       }
     }
@@ -618,7 +540,7 @@ impl TaskExecutor {
         batch.len()
       );
 
-      let batch_tasks = batch.to_vec();
+      let batch_tasks = batch.iter().cloned().collect::<Vec<_>>();
       let batch_results = self.execute(batch_tasks).await;
       all_results.extend(batch_results);
 
@@ -635,13 +557,13 @@ impl TaskExecutor {
 /// Builder for creating download tasks with validation.
 #[derive(Debug)]
 pub struct TaskBuilder {
-  url: Option<reqwest::Url>,
+  url: Option<Url>,
   temp_path: Option<PathBuf>,
   final_path: Option<PathBuf>,
   index: usize,
-  client: Option<reqwest::Client>,
-  config: Option<crate::Config>,
-  progress_tx: Option<progress::Sender>,
+  client: Option<Client>,
+  config: Option<DownloaderConfig>,
+  progress_tx: Option<ProgressSender>,
   event_sink: Option<Arc<dyn EventSink>>
 }
 
@@ -661,7 +583,7 @@ impl TaskBuilder {
   }
 
   /// Sets the URL to download from.
-  pub fn url(mut self, url: reqwest::Url) -> Self {
+  pub fn url(mut self, url: Url) -> Self {
     self.url = Some(url);
     self
   }
@@ -685,19 +607,19 @@ impl TaskBuilder {
   }
 
   /// Sets the HTTP client.
-  pub fn client(mut self, client: reqwest::Client) -> Self {
+  pub fn client(mut self, client: Client) -> Self {
     self.client = Some(client);
     self
   }
 
   /// Sets the configuration.
-  pub fn config(mut self, config: Config) -> Self {
+  pub fn config(mut self, config: DownloaderConfig) -> Self {
     self.config = Some(config);
     self
   }
 
   /// Sets the progress sender.
-  pub fn progress_sender(mut self, sender: progress::Sender) -> Self {
+  pub fn progress_sender(mut self, sender: ProgressSender) -> Self {
     self.progress_tx = Some(sender);
     self
   }
@@ -714,26 +636,26 @@ impl TaskBuilder {
   ///
   /// Returns an error if any required fields are missing.
   pub fn build(self) -> Result<DownloadTask> {
-    let url = self.url.ok_or_else(|| Error::Configuration {
-      message: "URL is required".to_string()
+    let url = self.url.ok_or_else(|| {
+      Error::ConfigurationError("URL is required".to_string())
     })?;
-    let temp_path = self.temp_path.ok_or_else(|| Error::Configuration {
-      message: "Temp path is required".to_string()
+    let temp_path = self.temp_path.ok_or_else(|| {
+      Error::ConfigurationError("Temp path is required".to_string())
     })?;
-    let final_path = self.final_path.ok_or_else(|| Error::Configuration {
-      message: "Final path is required".to_string()
+    let final_path = self.final_path.ok_or_else(|| {
+      Error::ConfigurationError("Final path is required".to_string())
     })?;
-    let client = self.client.ok_or_else(|| Error::Configuration {
-      message: "HTTP client is required".to_string()
+    let client = self.client.ok_or_else(|| {
+      Error::ConfigurationError("HTTP client is required".to_string())
     })?;
-    let config = self.config.ok_or_else(|| Error::Configuration {
-      message: "Configuration is required".to_string()
+    let config = self.config.ok_or_else(|| {
+      Error::ConfigurationError("Configuration is required".to_string())
     })?;
-    let progress_tx = self.progress_tx.ok_or_else(|| Error::Configuration {
-      message: "Progress sender is required".to_string()
+    let progress_tx = self.progress_tx.ok_or_else(|| {
+      Error::ConfigurationError("Progress sender is required".to_string())
     })?;
-    let event_sink = self.event_sink.ok_or_else(|| Error::Configuration {
-      message: "Event sink is required".to_string()
+    let event_sink = self.event_sink.ok_or_else(|| {
+      Error::ConfigurationError("Event sink is required".to_string())
     })?;
 
     Ok(DownloadTask {
@@ -758,7 +680,9 @@ impl Default for TaskBuilder {
 #[cfg(test)]
 mod tests {
   use super::*;
-  use crate::{Config, events::NoOpEventSink, progress::Reporter};
+  use crate::{
+    config::DownloaderConfig, events::NoOpEventSink, progress::ProgressReporter
+  };
   use tempfile::TempDir;
 
   #[tokio::test]
@@ -766,11 +690,11 @@ mod tests {
     let temp_dir = TempDir::new().unwrap();
     let temp_path = temp_dir.path().join("temp_file");
     let final_path = temp_dir.path().join("final_file");
-    let url = reqwest::Url::parse("https://httpbin.org/bytes/100").unwrap();
+    let url = Url::parse("https://httpbin.org/bytes/100").unwrap();
 
-    let client = reqwest::Client::new();
-    let config = Config::default();
-    let progress_reporter = Reporter::new(1);
+    let client = Client::new();
+    let config = DownloaderConfig::default();
+    let progress_reporter = ProgressReporter::new(1);
     let progress_tx = progress_reporter.sender();
     let event_sink = Arc::new(NoOpEventSink);
 
@@ -802,10 +726,10 @@ mod tests {
     let result = TaskBuilder::new().build();
     assert!(result.is_err());
 
-    if let Err(Error::Configuration { message }) = result {
-      assert!(message.contains("URL is required"));
+    if let Err(Error::ConfigurationError(msg)) = result {
+      assert!(msg.contains("URL is required"));
     } else {
-      panic!("Expected Configuration");
+      panic!("Expected ConfigurationError");
     }
   }
 }
