@@ -7,13 +7,13 @@ use crate::*;
 use std::{
   path::PathBuf,
   sync::Arc,
-  time::{Duration, Instant}
+  time::{Duration, Instant},
 };
 use tokio::{
   fs::{File, rename},
   io::AsyncWriteExt,
   sync::Semaphore,
-  time::sleep
+  time::sleep,
 };
 
 /// Represents a single download task with comprehensive metadata and
@@ -38,7 +38,7 @@ pub struct DownloadTask {
   /// Progress reporter
   pub progress_tx: progress::Sender,
   /// Event sink for notifications
-  pub event_sink: Arc<dyn EventSink>
+  pub event_sink: Arc<dyn EventSink>,
 }
 
 impl DownloadTask {
@@ -69,7 +69,7 @@ impl DownloadTask {
       .on_event(DownloadEvent::FileStarted {
         index: self.index,
         url: self.url.to_string(),
-        filename: filename.to_string()
+        filename: filename.to_string(),
       })
       .await;
 
@@ -95,7 +95,7 @@ impl DownloadTask {
           // Atomically move to final location
           if let Err(e) = rename(&self.temp_path, &self.final_path).await {
             let error = Error::FileSystem {
-              message: format!("Failed to move file to final location: {e}")
+              message: format!("Failed to move file to final location: {e}"),
             };
 
             self
@@ -104,7 +104,7 @@ impl DownloadTask {
                 index: self.index,
                 url: self.url.to_string(),
                 error: error.to_string(),
-                retry_count
+                retry_count,
               })
               .await;
 
@@ -117,7 +117,7 @@ impl DownloadTask {
             bytes_downloaded,
             duration,
             retry_count,
-            final_speed
+            final_speed,
           };
 
           // Report successful completion
@@ -131,7 +131,7 @@ impl DownloadTask {
               index: self.index,
               filename: filename.to_string(),
               bytes_downloaded,
-              duration
+              duration,
             })
             .await;
 
@@ -167,7 +167,7 @@ impl DownloadTask {
               url: self.url.to_string(),
               attempt: retry_count + 1,
               max_attempts: self.config.max_retries,
-              delay: self.config.retry_delay
+              delay: self.config.retry_delay,
             })
             .await;
 
@@ -187,7 +187,7 @@ impl DownloadTask {
     // All retries exhausted
     let final_error = last_error.unwrap_or_else(|| Error::TaskFailed {
       index: self.index,
-      reason: "Unknown error after retries".to_string()
+      reason: "Unknown error after retries".to_string(),
     });
 
     self.progress_tx.failed(self.index, final_error.to_string());
@@ -198,7 +198,7 @@ impl DownloadTask {
         index: self.index,
         url: self.url.to_string(),
         error: final_error.to_string(),
-        retry_count
+        retry_count,
       })
       .await;
 
@@ -219,7 +219,7 @@ impl DownloadTask {
     // Make the HTTP request
     let response = request.send().await.map_err(|e| Error::RequestFailed {
       url: self.url.to_string(),
-      source: e
+      download: e,
     })?;
 
     // Check response status
@@ -227,7 +227,7 @@ impl DownloadTask {
       return Err(Error::HttpStatus {
         status: response.status().as_u16(),
         url: self.url.to_string(),
-        message: "Failed to download file".to_string()
+        message: "Failed to download file".to_string(),
       });
     }
 
@@ -239,7 +239,7 @@ impl DownloadTask {
     {
       return Err(Error::FileTooLarge {
         size: content_len,
-        max_size
+        max_size,
       });
     }
 
@@ -258,7 +258,7 @@ impl DownloadTask {
   async fn download_with_progress(
     &self,
     response: reqwest::Response,
-    content_length: Option<u64>
+    content_length: Option<u64>,
   ) -> Result<u64> {
     use tokio_stream::StreamExt;
 
@@ -267,7 +267,7 @@ impl DownloadTask {
       File::create(&self.temp_path)
         .await
         .map_err(|e| Error::FileSystem {
-          message: format!("Failed to create temp file: {e}")
+          message: format!("Failed to create temp file: {e}"),
         })?;
 
     let mut stream = response.bytes_stream();
@@ -277,7 +277,7 @@ impl DownloadTask {
     while let Some(chunk_result) = stream.next().await {
       let chunk = chunk_result.map_err(|e| Error::RequestFailed {
         url: self.url.to_string(),
-        source: e
+        download: e,
       })?;
 
       // Write chunk to file
@@ -285,7 +285,7 @@ impl DownloadTask {
         .write_all(&chunk)
         .await
         .map_err(|e| Error::FileSystem {
-          message: format!("Failed to write to temp file: {e}")
+          message: format!("Failed to write to temp file: {e}"),
         })?;
 
       bytes_downloaded += chunk.len() as u64;
@@ -305,7 +305,7 @@ impl DownloadTask {
         self.progress_tx.progress(
           self.index,
           bytes_downloaded as usize,
-          content_length.map(|c| c as usize)
+          content_length.map(|c| c as usize),
         );
 
         // FIXED: Handle closed event sink gracefully
@@ -315,7 +315,7 @@ impl DownloadTask {
             index: self.index,
             bytes_downloaded,
             total_bytes: content_length,
-            percentage
+            percentage,
           })
           .await;
 
@@ -328,14 +328,14 @@ impl DownloadTask {
       {
         return Err(Error::FileTooLarge {
           size: bytes_downloaded,
-          max_size
+          max_size,
         });
       }
     }
 
     // Ensure all data is written to disk
     temp_file.flush().await.map_err(|e| Error::FileSystem {
-      message: format!("Failed to flush temp file: {e}")
+      message: format!("Failed to flush temp file: {e}"),
     })?;
 
     drop(temp_file); // Close file handle
@@ -369,7 +369,7 @@ impl DownloadTask {
   //   while let Some(chunk_result) = stream.next().await {
   //     let chunk = chunk_result.map_err(|e| Error::RequestFailed {
   //       url: self.url.to_string(),
-  //       source: e
+  //       download: e
   //     })?;
 
   //     // Write chunk to file
@@ -453,17 +453,17 @@ pub struct TaskResult {
   /// Number of retry attempts made
   pub retry_count: usize,
   /// Final download speed in bytes per second
-  pub final_speed: f64
+  pub final_speed: f64,
 }
 
 /// Executes download tasks with configurable concurrency control.
 ///
-/// This enhanced executor provides better resource management and
+/// This enhanced executor provides better redownload management and
 /// monitoring compared to the original version.
 #[derive(Debug)]
 pub struct TaskExecutor {
   /// Optional concurrency limit
-  concurrency_limit: Option<usize>
+  concurrency_limit: Option<usize>,
 }
 
 impl TaskExecutor {
@@ -492,7 +492,7 @@ impl TaskExecutor {
   /// order.
   pub async fn execute(
     &self,
-    tasks: Vec<DownloadTask>
+    tasks: Vec<DownloadTask>,
   ) -> Vec<Result<TaskResult>> {
     if tasks.is_empty() {
       return Vec::new();
@@ -506,7 +506,7 @@ impl TaskExecutor {
 
     match self.concurrency_limit {
       Some(limit) => self.execute_with_semaphore(tasks, limit).await,
-      None => self.execute_unlimited(tasks).await
+      None => self.execute_unlimited(tasks).await,
     }
   }
 
@@ -514,7 +514,7 @@ impl TaskExecutor {
   async fn execute_with_semaphore(
     &self,
     tasks: Vec<DownloadTask>,
-    limit: usize
+    limit: usize,
   ) -> Vec<Result<TaskResult>> {
     let semaphore = Arc::new(Semaphore::new(limit));
     let mut handles = Vec::with_capacity(tasks.len());
@@ -548,7 +548,7 @@ impl TaskExecutor {
           error!("Task {} panicked: {}", index, join_error);
           results.push(Err(Error::TaskFailed {
             index,
-            reason: join_error.to_string()
+            reason: join_error.to_string(),
           }));
         }
       }
@@ -560,7 +560,7 @@ impl TaskExecutor {
   // Fix for execute_unlimited method:
   async fn execute_unlimited(
     &self,
-    tasks: Vec<DownloadTask>
+    tasks: Vec<DownloadTask>,
   ) -> Vec<Result<TaskResult>> {
     let mut handles = Vec::with_capacity(tasks.len());
 
@@ -581,7 +581,7 @@ impl TaskExecutor {
           error!("Task {} panicked: {}", index, join_error);
           results.push(Err(Error::TaskFailed {
             index,
-            reason: join_error.to_string()
+            reason: join_error.to_string(),
           }));
         }
       }
@@ -590,14 +590,14 @@ impl TaskExecutor {
     results
   }
 
-  /// Executes tasks in batches to manage resource usage.
+  /// Executes tasks in batches to manage redownload usage.
   ///
   /// This method is useful for very large numbers of downloads where
   /// you want to process them in manageable chunks.
   pub async fn execute_in_batches(
     &self,
     tasks: Vec<DownloadTask>,
-    batch_size: usize
+    batch_size: usize,
   ) -> Vec<Result<TaskResult>> {
     if tasks.is_empty() || batch_size == 0 {
       return Vec::new();
@@ -642,7 +642,7 @@ pub struct TaskBuilder {
   client: Option<reqwest::Client>,
   config: Option<crate::Config>,
   progress_tx: Option<progress::Sender>,
-  event_sink: Option<Arc<dyn EventSink>>
+  event_sink: Option<Arc<dyn EventSink>>,
 }
 
 impl TaskBuilder {
@@ -656,7 +656,7 @@ impl TaskBuilder {
       client: None,
       config: None,
       progress_tx: None,
-      event_sink: None
+      event_sink: None,
     }
   }
 
@@ -715,25 +715,25 @@ impl TaskBuilder {
   /// Returns an error if any required fields are missing.
   pub fn build(self) -> Result<DownloadTask> {
     let url = self.url.ok_or_else(|| Error::Configuration {
-      message: "URL is required".to_string()
+      message: "URL is required".to_string(),
     })?;
     let temp_path = self.temp_path.ok_or_else(|| Error::Configuration {
-      message: "Temp path is required".to_string()
+      message: "Temp path is required".to_string(),
     })?;
     let final_path = self.final_path.ok_or_else(|| Error::Configuration {
-      message: "Final path is required".to_string()
+      message: "Final path is required".to_string(),
     })?;
     let client = self.client.ok_or_else(|| Error::Configuration {
-      message: "HTTP client is required".to_string()
+      message: "HTTP client is required".to_string(),
     })?;
     let config = self.config.ok_or_else(|| Error::Configuration {
-      message: "Configuration is required".to_string()
+      message: "Configuration is required".to_string(),
     })?;
     let progress_tx = self.progress_tx.ok_or_else(|| Error::Configuration {
-      message: "Progress sender is required".to_string()
+      message: "Progress sender is required".to_string(),
     })?;
     let event_sink = self.event_sink.ok_or_else(|| Error::Configuration {
-      message: "Event sink is required".to_string()
+      message: "Event sink is required".to_string(),
     })?;
 
     Ok(DownloadTask {
@@ -744,7 +744,7 @@ impl TaskBuilder {
       client,
       config,
       progress_tx,
-      event_sink
+      event_sink,
     })
   }
 }

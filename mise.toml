@@ -69,6 +69,11 @@ description = "Push the changes to the main branch"
 alias = "up"
 run = ["jj describe", "jj bookmark set main --revision=@", "jj git push"]
 
+[tasks.pull]
+description = "Pull the changes to the main branch"
+alias = "up"
+run = ["jj git fetch", "jj rebase --destination main"]
+
 [tasks.files]
 description = "List the files in the current directory"
 alias = "fl"

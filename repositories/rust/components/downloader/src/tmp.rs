@@ -382,7 +382,7 @@ impl DownloadTask {
 
 /// Executes download tasks with configurable concurrency control.
 ///
-/// This enhanced executor provides better resource management and
+/// This enhanced executor provides better redownload management and
 /// monitoring compared to the original version.
 #[derive(Debug)]
 pub struct TaskExecutor {
@@ -512,7 +512,7 @@ impl TaskExecutor {
     results
   }
 
-  /// Executes tasks in batches to manage resource usage.
+  /// Executes tasks in batches to manage redownload usage.
   ///
   /// This method is useful for very large numbers of downloads where
   /// you want to process them in manageable chunks.

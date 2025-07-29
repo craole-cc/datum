@@ -20,11 +20,11 @@ pub enum Error {
   InvalidPath { path: String, reason: String },
 
   /// HTTP request failed (network issues, DNS, etc.)
-  #[error("Request failed for '{url}': {source}")]
+  #[error("Request failed for '{url}': {download}")]
   RequestFailed {
     url: String,
     #[source]
-    source: reqwest::Error
+    download: reqwest::Error,
   },
 
   /// HTTP server returned an error status
@@ -32,7 +32,7 @@ pub enum Error {
   HttpStatus {
     status: u16,
     url: String,
-    message: String
+    message: String,
   },
 
   /// File system operation failed
@@ -94,7 +94,7 @@ pub enum Error {
   TooManyRedirects {
     url: String,
     count: usize,
-    limit: usize
+    limit: usize,
   },
 
   #[error("No filename could be extracted from URL: {0}")]
@@ -119,7 +119,7 @@ pub enum Error {
 
   /// Multiple errors occurred (batch operations)
   #[error("Multiple errors occurred: {}", format_multiple_errors(.errors))]
-  MultipleErrors { errors: Vec<Error> }
+  MultipleErrors { errors: Vec<Error> },
 }
 
 /// Convenience type alias for Results.
@@ -130,7 +130,7 @@ impl Error {
   pub fn invalid_url<S: AsRef<str>>(url: S, reason: S) -> Self {
     Self::InvalidUrl {
       url: url.as_ref().to_string(),
-      reason: reason.as_ref().to_string()
+      reason: reason.as_ref().to_string(),
     }
   }
 
@@ -138,7 +138,7 @@ impl Error {
   pub fn invalid_path<S: AsRef<str>>(path: S, reason: S) -> Self {
     Self::InvalidPath {
       path: path.as_ref().to_string(),
-      reason: reason.as_ref().to_string()
+      reason: reason.as_ref().to_string(),
     }
   }
 
@@ -147,14 +147,14 @@ impl Error {
     Self::HttpStatus {
       status,
       url: url.as_ref().to_string(),
-      message: message.as_ref().to_string()
+      message: message.as_ref().to_string(),
     }
   }
 
   /// Creates an I/O error with context.
   pub fn io_error<S: AsRef<str>>(message: S) -> Self {
     Self::FileSystem {
-      message: message.as_ref().to_string()
+      message: message.as_ref().to_string(),
     }
   }
 
@@ -176,14 +176,14 @@ impl Error {
   /// Creates a filename error.
   pub fn filename_error<S: AsRef<str>>(message: S) -> Self {
     Self::Filename {
-      message: message.as_ref().to_string()
+      message: message.as_ref().to_string(),
     }
   }
 
   /// Creates a validation error.
   pub fn validation_error<S: AsRef<str>>(message: S) -> Self {
     Self::Validation {
-      message: message.as_ref().to_string()
+      message: message.as_ref().to_string(),
     }
   }
 
@@ -191,7 +191,7 @@ impl Error {
   pub fn authentication_error<S: AsRef<str>>(url: S, message: S) -> Self {
     Self::Authentication {
       url: url.as_ref().to_string(),
-      message: message.as_ref().to_string()
+      message: message.as_ref().to_string(),
     }
   }
 
@@ -199,7 +199,7 @@ impl Error {
   pub fn certificate_error<S: AsRef<str>>(url: S, message: S) -> Self {
     Self::Certificate {
       url: url.as_ref().to_string(),
-      message: message.as_ref().to_string()
+      message: message.as_ref().to_string(),
     }
   }
 
@@ -207,7 +207,7 @@ impl Error {
   pub fn timeout_error<S: AsRef<str>>(url: S, duration: u64) -> Self {
     Self::Timeout {
       url: url.as_ref().to_string(),
-      duration
+      duration,
     }
   }
 
@@ -220,7 +220,7 @@ impl Error {
   pub fn content_validation_error<S: AsRef<str>>(url: S, reason: S) -> Self {
     Self::ContentValidation {
       url: url.as_ref().to_string(),
-      reason: reason.as_ref().to_string()
+      reason: reason.as_ref().to_string(),
     }
   }
 
@@ -228,23 +228,23 @@ impl Error {
   pub fn too_many_redirects<S: AsRef<str>>(
     url: S,
     count: usize,
-    limit: usize
+    limit: usize,
   ) -> Self {
     Self::TooManyRedirects {
       url: url.as_ref().to_string(),
       count,
-      limit
+      limit,
     }
   }
 
   /// Creates an unsupported content type error.
   pub fn unsupported_content_type<S: AsRef<str>>(
     url: S,
-    content_type: S
+    content_type: S,
   ) -> Self {
     Self::UnsupportedContentType {
       url: url.as_ref().to_string(),
-      content_type: content_type.as_ref().to_string()
+      content_type: content_type.as_ref().to_string(),
     }
   }
 
@@ -252,7 +252,7 @@ impl Error {
   pub fn rate_limited<S: AsRef<str>>(url: S, retry_after: u64) -> Self {
     Self::RateLimited {
       url: url.as_ref().to_string(),
-      retry_after
+      retry_after,
     }
   }
 
@@ -275,13 +275,14 @@ impl Error {
       }
 
       // I/O errors that might be temporary
-      Error::FileSystem { message } =>
+      Error::FileSystem { message } => {
         message.contains("temporarily unavailable")
           || message.contains("timeout")
-          || message.contains("connection"),
+          || message.contains("connection")
+      }
 
       // All other errors are generally not recoverable
-      _ => false
+      _ => false,
     }
   }
 
@@ -320,7 +321,7 @@ impl Error {
       ],
       Error::Authentication { .. } => vec![
         "Check your credentials",
-        "Verify you have permission to access this resource",
+        "Verify you have permission to access this redownload",
         "Add authentication headers to the configuration",
       ],
       Error::InsufficientSpace { .. } => vec![
@@ -338,28 +339,33 @@ impl Error {
         "Check your internet connection speed",
         "Try downloading during off-peak hours",
       ],
-      _ => vec!["Check the error details and try again"]
+      _ => vec!["Check the error details and try again"],
     }
   }
 
   /// Returns the error category for grouping similar errors.
   pub fn category(&self) -> ErrorKind {
     match self {
-      Error::InvalidUrl { .. } | Error::Validation { .. } =>
-        ErrorKind::Validation,
-      Error::InvalidPath { .. } | Error::FileSystem { .. } =>
-        ErrorKind::FileSystem,
+      Error::InvalidUrl { .. } | Error::Validation { .. } => {
+        ErrorKind::Validation
+      }
+      Error::InvalidPath { .. } | Error::FileSystem { .. } => {
+        ErrorKind::FileSystem
+      }
       Error::RequestFailed { .. } | Error::Timeout { .. } => ErrorKind::Network,
       Error::HttpStatus { .. } => ErrorKind::Http,
-      Error::FileExists(_) | Error::ExistingFiles { .. } =>
-        ErrorKind::FileConflict,
-      Error::Authentication { .. } | Error::Certificate { .. } =>
-        ErrorKind::Authentication,
-      Error::FileTooLarge { .. } | Error::InsufficientSpace { .. } =>
-        ErrorKind::Storage,
+      Error::FileExists(_) | Error::ExistingFiles { .. } => {
+        ErrorKind::FileConflict
+      }
+      Error::Authentication { .. } | Error::Certificate { .. } => {
+        ErrorKind::Authentication
+      }
+      Error::FileTooLarge { .. } | Error::InsufficientSpace { .. } => {
+        ErrorKind::Storage
+      }
       Error::TaskFailed { .. } => ErrorKind::Task,
       Error::Configuration { .. } => ErrorKind::Configuration,
-      _ => ErrorKind::Other
+      _ => ErrorKind::Other,
     }
   }
 }
@@ -376,7 +382,7 @@ pub enum ErrorKind {
   Storage,
   Task,
   Configuration,
-  Other
+  Other,
 }
 
 impl std::fmt::Display for ErrorKind {
@@ -391,7 +397,7 @@ impl std::fmt::Display for ErrorKind {
       ErrorKind::Storage => write!(f, "Storage"),
       ErrorKind::Task => write!(f, "Task"),
       ErrorKind::Configuration => write!(f, "Configuration"),
-      ErrorKind::Other => write!(f, "Other")
+      ErrorKind::Other => write!(f, "Other"),
     }
   }
 }
@@ -410,10 +416,10 @@ impl From<reqwest::Error> for Error {
       Error::TooManyRedirects {
         url,
         count: 10,
-        limit: 10
+        limit: 10,
       } // Default assumption
     } else {
-      Error::RequestFailed { url, source: err }
+      Error::RequestFailed { url, download: err }
     }
   }
 }
@@ -421,7 +427,7 @@ impl From<reqwest::Error> for Error {
 impl From<std::io::Error> for Error {
   fn from(err: std::io::Error) -> Self {
     Error::FileSystem {
-      message: err.to_string()
+      message: err.to_string(),
     }
   }
 }
@@ -430,7 +436,7 @@ impl From<tokio::task::JoinError> for Error {
   fn from(err: tokio::task::JoinError) -> Self {
     Error::TaskFailed {
       index: 0, // Can't determine index from JoinError
-      reason: err.to_string()
+      reason: err.to_string(),
     }
   }
 }
@@ -438,7 +444,7 @@ impl From<tokio::task::JoinError> for Error {
 impl From<url::ParseError> for Error {
   fn from(e: url::ParseError) -> Self {
     Error::Validation {
-      message: format!("URL parse error: {e}")
+      message: format!("URL parse error: {e}"),
     }
   }
 }

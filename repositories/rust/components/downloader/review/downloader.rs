@@ -79,7 +79,7 @@ impl Downloader {
     let home = PathBuf::from(path.as_ref());
 
     trace!(
-      "Creating new Downloader with source: {urls:?}, target: {home:#?} and concurrency limit: {concurrency_limit:?}",
+      "Creating new Downloader with download: {urls:?}, target: {home:#?} and concurrency limit: {concurrency_limit:?}",
     );
 
     Self {

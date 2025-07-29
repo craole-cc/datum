@@ -10,7 +10,7 @@ use std::path::PathBuf;
 /// Represents a single download task with all necessary paths and metadata.
 ///
 /// This struct contains all the information needed to download a single file:
-/// - The source URL
+/// - The download URL
 /// - Temporary file path (for atomic operations)
 /// - Final destination path
 /// - Index for logging and identification

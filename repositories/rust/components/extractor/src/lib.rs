@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 #[derive(Debug)]
 pub struct Extractor {
-  pub source_path: PathBuf,
+  pub download_path: PathBuf,
   pub target_path: PathBuf
 }
 

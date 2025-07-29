@@ -1,0 +1,17 @@
+[package]
+name = "imdb-dataset"
+description = "Datum IMDB Datasets Definition"
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+keywords = ["cli", "command", "line", "interface", "data"]
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+directories = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }

@@ -1,0 +1,18 @@
+[package]
+name = "converter"
+description = "Convert between types"
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+keywords = ["cli", "command", "line", "interface", "data"]
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror = { workspace = true }
+anyhow = { workspace = true }    # Remove this after creating a custom error crate
+tracing = { workspace = true }
+polars = { workspace = true }
+rayon = { workspace = true }
