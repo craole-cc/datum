@@ -1,24 +1,19 @@
 use crate::*;
+use std::path::PathBuf;
 
 pub fn inspect_file_manually(path: &std::path::Path) -> Result<()> {
-  // let file = File::open(path).map_err(|source| {
-  //   FilesystemError::file_read_with_ctx(
-  //     source,
-  //     path,
-  //     "Failed to open the file to inspect manually",
-  //   )
+  // let file = File::open(path).map_err(|source| Error::FileRead {
+  //   source,
+  //   path: PathBuf::from(path),
+  //   context: String::from("Failed to open the file to inspect manually"),
   // })?;
+
+  // let file =
+  //   File::open(path).map_err(|source| Error::file_open(source, path))?;
 
   let file =
-    File::open(path).map_err(|source| Error::fs_file_read(source, path))?;
+    File::open(path).context(format!("could not read config at {path:?}"))?;
 
-  // let file = File::open(path).map_err(|source| {
-  //   Error::fs_file_read_with_context(
-  //     source,
-  //     path,
-  //     "Failed to open the file to inspect manually",
-  //   )
-  // })?;
   let reader = BufReader::new(file);
   let mut lines = reader.lines();
 

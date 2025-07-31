@@ -690,6 +690,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
 
 [[package]]
+name = "erks"
+version = "0.1.0"
+dependencies = [
+ "macros",
+ "miette",
+ "regex",
+ "thiserror",
+]
+
+[[package]]
 name = "errno"
 version = "0.3.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -697,19 +707,6 @@ checksum = "778e2ac28f6c47af28e4907f13ffd1e1ddbd400980a9abd7c8df189bf578a5ad"
 dependencies = [
  "libc",
  "windows-sys 0.59.0",
-]
-
-[[package]]
-name = "error"
-version = "0.1.0"
-dependencies = [
- "miette",
- "paste",
- "polars",
- "reqwest",
- "thiserror",
- "tokio",
- "url",
 ]
 
 [[package]]
@@ -1287,25 +1284,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "imdb"
-version = "0.1.0"
-dependencies = [
- "directories",
- "downloader",
- "error",
- "extractor",
- "imdb-cli",
- "imdb-dataset",
- "miette",
- "polars",
- "rayon",
- "serde",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "imdb-cli"
 version = "0.1.0"
 dependencies = [
@@ -1518,6 +1496,16 @@ checksum = "6bd8c0d6c6ed0cd30b3652886bb8711dc4bb01d637a68105a3d5158039b418e6"
 dependencies = [
  "cc",
  "libc",
+]
+
+[[package]]
+name = "macros"
+version = "0.1.0"
+dependencies = [
+ "heck",
+ "proc-macro2",
+ "quote",
+ "syn",
 ]
 
 [[package]]
@@ -3267,6 +3255,14 @@ checksum = "45c6481c4829e4cc63825e62c49186a34538b7b2750b73b266581ffb612fb5ed"
 dependencies = [
  "rustix 1.0.8",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "test"
+version = "0.1.0"
+dependencies = [
+ "erks",
+ "miette",
 ]
 
 [[package]]

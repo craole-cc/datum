@@ -1,0 +1,27 @@
+[package]
+name = "test"
+default-run = "test"
+description = "Playground"
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+keywords = ["cli", "command", "line", "interface", "data"]
+
+[lints]
+workspace = true
+
+[dependencies]
+# directories = { workspace = true }
+# downloader = { path = "../../components/downloader" }
+erks = { path = "../../components/erks" }
+# extractor = { path = "../../components/extractor" }
+# imdb-cli = { path = "../../bases/imdb" }
+# imdb-dataset = { path = "../../components/imdb" }
+miette = { workspace = true, features = ["fancy"] }
+# polars = { workspace = true }
+# rayon = { workspace = true }
+# serde = { workspace = true }
+# tokio = { workspace = true }
+# tracing = { workspace = true }
+# tracing-subscriber = { workspace = true }

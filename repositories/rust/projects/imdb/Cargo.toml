@@ -1,6 +1,6 @@
 [package]
 name = "imdb"
-default-run = "imdb"
+# default-run = "imdb"
 description = "Datum IMDB Project"
 version = { workspace = true }
 edition = { workspace = true }
@@ -14,7 +14,7 @@ workspace = true
 [dependencies]
 directories = { workspace = true }
 downloader = { path = "../../components/downloader" }
-error = { path = "../../components/error" }
+erks = { path = "../../components/erks" }
 extractor = { path = "../../components/extractor" }
 imdb-cli = { path = "../../bases/imdb" }
 imdb-dataset = { path = "../../components/imdb" }

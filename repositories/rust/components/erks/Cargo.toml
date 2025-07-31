@@ -1,0 +1,51 @@
+[package]
+name = "erks"
+description = "Datum - Error Library"
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+keywords = ["error", "miette", "diagnostic"]
+
+[lib]
+name = "erks"
+path = "src/lib.rs"
+
+# Example that uses fancy features (for applications)
+[[example]]
+name = "erks"
+path = "examples/comprehensive.rs"
+required-features = ["fancy"]
+
+# Example that uses fancy features (for applications)
+[[example]]
+name = "erks_fancy"
+path = "examples/fancy.rs"
+required-features = ["fancy"]
+
+# Example that works without fancy features (for libraries)
+[[example]]
+name = "erks_simple"
+path = "examples/simple.rs"
+
+# Integration tests
+[[test]]
+name = "integration"
+path = "tests/integration.rs"
+
+[lints]
+workspace = true
+
+[features]
+default = []
+fancy = ["miette/fancy"]
+unstable = []
+
+[dependencies]
+macros = { path = "macros" }
+miette = { workspace = true }
+regex = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+miette = { workspace = true, features = ["fancy"] }

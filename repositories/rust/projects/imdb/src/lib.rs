@@ -14,7 +14,7 @@ extern crate tracing;
 // region: Exports
 // pub use config::Config;
 // pub use errors::prelude::*;
-pub use error::{Error, Result};
+pub use erks::{Context, Error, Result};
 pub use imdb_dataset::*;
 // pub use ingestion::*;
 pub use polars::prelude::*;
