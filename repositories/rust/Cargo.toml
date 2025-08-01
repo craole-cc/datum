@@ -39,7 +39,6 @@ anyhow = "1.0.91"
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 
-
 #| Macros & Constructors
 cfg-if = "1.0.1"
 heck = "0.5.0"
@@ -49,10 +48,11 @@ quote = "1"
 syn = { version = "2.0.104", features = ["full"] }
 
 #| Sync & Async
-once_cell = "1.20.2"
-tokio = { version = "1.47.0", features = ["full"] }
-tokio-stream = "0.1.17"
 async-trait = "0.1.88"
+futures = "0.3.31"
+once_cell = "1.20.2"
+tokio = { version = "1.47.1", features = ["full"] }
+tokio-stream = "0.1.17"
 
 #| Serialization & Config Management
 regex = "1.11.1"
@@ -62,7 +62,7 @@ serde = { version = "1.0.219", features = ["derive"] }
 # toml_edit = "0.23.1"
 # config = "0.15.13"
 
-#| Web
+#| Network
 reqwest = { version = "0.12.22", features = ["json", "blocking", "stream"] }
 urlencoding = "2.1.3"
 url = "2.5.4"
@@ -71,8 +71,9 @@ url = "2.5.4"
 rayon = "1.7"
 
 #| Data Management
-# deltalake = { version = "0.27.0", features = ["datafusion"] }
-polars = { version = "0.49.1", features = [
+deltalake = { version = "0.27.0", features = ["datafusion"] }
+# datafusion = "49.0.0"
+polars = { version = "0.50.0", features = [
   "lazy",
   "temporal",
   "describe",
@@ -80,7 +81,6 @@ polars = { version = "0.49.1", features = [
   "parquet",
   "dtype-datetime",
 ] }
-
 
 #| Command-line Interface
 clap = { version = "4.5.42", features = ["derive", "cargo"] }

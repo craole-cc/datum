@@ -36,7 +36,7 @@ pub mod prelude {
   };
 }
 pub use prelude::*;
-
+pub use std::process::{ExitCode, ExitStatus, exit};
 // Re-export essential miette types so users don't need to import miette directly
 pub use miette::{
   Diagnostic, IntoDiagnostic, MietteHandlerOpts, Report,

@@ -14,12 +14,11 @@ workspace = true
 [dependencies]
 directories = { workspace = true }
 downloader = { path = "../../components/downloader" }
-erks = { path = "../../components/erks" }
+erks = { path = "../../components/erks", features = ["fancy"] }
 extractor = { path = "../../components/extractor" }
 imdb-cli = { path = "../../bases/imdb" }
 imdb-dataset = { path = "../../components/imdb" }
-miette = { workspace = true, features = ["fancy"] }
-polars = { workspace = true }
+# polars = { workspace = true }
 rayon = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
