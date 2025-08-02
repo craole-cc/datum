@@ -14,5 +14,4 @@ workspace = true
 thiserror = { workspace = true }
 anyhow = { workspace = true }    # Remove this after creating a custom error crate
 tracing = { workspace = true }
-polars = { workspace = true }
-rayon = { workspace = true }
+# polars = { workspace = true }

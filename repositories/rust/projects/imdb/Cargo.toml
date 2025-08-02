@@ -1,6 +1,6 @@
 [package]
 name = "imdb"
-# default-run = "imdb"
+default-run = "imdb"
 description = "Datum IMDB Project"
 version = { workspace = true }
 edition = { workspace = true }
@@ -12,15 +12,20 @@ keywords = ["cli", "command", "line", "interface", "data"]
 workspace = true
 
 [dependencies]
+#| Intenal
+downloader = { workspace = true }
+erks = { workspace = true }
+extractor = { workspace = true }
+imdb-cli = { workspace = true }
+imdb-dataset = { workspace = true }
+utils = { workspace = true }
+
+#| External
+deltalake = { version = "0.27.0", features = ["datafusion"] }
 directories = { workspace = true }
-downloader = { path = "../../components/downloader" }
-erks = { path = "../../components/erks", features = ["fancy"] }
-extractor = { path = "../../components/extractor" }
-imdb-cli = { path = "../../bases/imdb" }
-imdb-dataset = { path = "../../components/imdb" }
-# polars = { workspace = true }
-rayon = { workspace = true }
+futures = { workspace = true }
+miette = { workspace = true, features = ["fancy"] }
 serde = { workspace = true }
 tokio = { workspace = true }
-tracing = { workspace = true }
-tracing-subscriber = { workspace = true }
+# tracing = { workspace = true }
+# tracing-subscriber = { workspace = true }

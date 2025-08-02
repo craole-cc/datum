@@ -1,36 +1,24 @@
-// -- Library (lib.rs) -- //
+// -- Library (projects/imdb/src/lib.rs) -- //
 
-// region: Module Imports
-// pub mod config;
-// mod ingestion;
-pub mod utils;
-// endregion
+// -- Module Imports
+pub mod config;
 
-// region: Macros
-#[macro_use]
-extern crate tracing;
-// endregion
+// -- Internal Imports
+pub(crate) use erks::*; // Errors and Tracing
+pub(crate) use utils::*; // Reuable functions
 
-// region: Exports
-// pub use config::Config;
-// pub use errors::prelude::*;
-pub use erks::{Context, Error, Result};
-pub use imdb_dataset::*;
-// pub use ingestion::*;
-pub use polars::prelude::*;
-pub use rayon::prelude::*;
-pub use std::{
-  fs::{File, metadata, read_dir, remove_file},
-  io::{BufRead, BufReader},
-  path::Path,
-  sync::Mutex,
+// -- External Imports
+pub(crate) use futures::future::join_all;
+pub(crate) use std::{
+  collections::{HashMap, HashSet},
+  ffi::OsStr,
+  fs::{File, create_dir_all, metadata, read_dir, remove_file},
+  future::Future,
+  io::{BufRead, BufReader, Read},
+  path::{Path, PathBuf},
+  sync::{Arc, Mutex},
+  thread::sleep,
   time::SystemTime,
 };
-// pub use utils::*;
-// endregion
-
-// region: Public Exports
-// pub use ingest::run;
-// endregion
 
 // -- End of the Library module (lib.rs) -- //

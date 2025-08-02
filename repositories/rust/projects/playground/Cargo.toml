@@ -1,6 +1,6 @@
 [package]
-name = "test"
-default-run = "test"
+name = "playground"
+# default-run = "playground"
 description = "Playground"
 version = { workspace = true }
 edition = { workspace = true }
@@ -12,9 +12,19 @@ keywords = ["cli", "command", "line", "interface", "data"]
 workspace = true
 
 [dependencies]
-polars = { workspace = true }
-tokio = { workspace = true }
+#| Intenal
+utils = { workspace = true }
+
+#| External
+
 anyhow = { workspace = true }
 deltalake = { workspace = true }
 directories = { workspace = true }
 futures = { workspace = true }
+miette = { workspace = true, features = ["fancy"] }
+regex = { workspace = true }
+tempfile = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }

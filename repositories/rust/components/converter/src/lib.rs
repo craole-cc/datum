@@ -9,8 +9,6 @@ extern crate anyhow;
 
 // region: Internal Exports
 use anyhow::{Context, Result};
-use polars::prelude::*;
-use rayon::prelude::*;
 use std::{
   fs::{File, metadata, read_dir, remove_file},
   io::{BufRead, BufReader},

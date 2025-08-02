@@ -1,5 +1,16 @@
 use crate::*;
 
+/// (Display name, Dataset filename)
+pub const DATASETS: [(&str, &str); 7] = [
+  ("Credits", "title.principals"),
+  ("Crew", "title.crew"),
+  ("Profiles", "name.basics"),
+  ("Ratings", "title.ratings"),
+  ("Series", "title.episode"),
+  ("Title", "title.basics"),
+  ("Variants", "title.akas"),
+];
+
 #[derive(Debug, Clone)]
 pub struct Config {
   /// The name/key used to identify this dataset
@@ -8,13 +19,12 @@ pub struct Config {
   /// The path to the raw dataset file
   pub dataset: PathBuf,
 
-  /// Directory containing the source files
+  /// Directory containing the import files
   pub source_dir: PathBuf,
-
   /// Directory for imported/processed files
   pub import_dir: PathBuf,
 
-  /// Extension of source files
+  /// Exteimport of source files
   pub source_ext: String,
 
   /// Extension for imported files
@@ -23,7 +33,7 @@ pub struct Config {
   /// Column separator (e.g. '\t' for TSV)
   pub delimiter: u8,
 
-  /// Optional number of rows per chunk to read
+  /// of the u8imported dataset Optional number of rows per chunk to read
   pub chunk_size: Option<usize>,
 
   /// Maximum number of chunks to read
@@ -43,6 +53,7 @@ pub struct Config {
 
   /// Processing mode
   pub mode: ProcessingMode,
+  pub parquet_compression: Option<String>,
 }
 
 impl Default for Config {
@@ -61,13 +72,13 @@ impl Default for Config {
       ignore_errors: true,
       null_values: vec![
         "\\N".into(),
-        "".into(),
         "N/A".into(),
         "N/A.".into(),
         "n/a".into(),
       ],
       skip_rows: 0,
       mode: ProcessingMode::default(),
+      parquet_compression: Some("snappy".into()),
     }
   }
 }
@@ -75,8 +86,9 @@ impl Default for Config {
 impl Config {
   /// Create a new Config for the given dataset name
   pub fn new(name: &str) -> TheResult<Self> {
+    let name = name.trim().to_lowercase();
     // Get the actual filename from the mapping
-    let dataset_filename = get_dataset_mapping(name)
+    let dataset_filename = get_dataset_mapping(&name)
       .context(format!("Unable to resolve mapping for {name}"))?;
 
     // Get the full path to the dataset file
@@ -151,19 +163,79 @@ impl Config {
     self.dataset.exists() && self.dataset.is_file()
   }
 
+  /// Returns an error if the dataset path is missing or not a file.
+  pub fn ensure_source_exists(&self) -> TheResult<()> {
+    // 1. Probe existence, surfacing any I/O errors
+    let exists = self
+      .dataset
+      .try_exists()
+      .into_diagnostic()
+      .wrap_err("Failed to check dataset path existence")?;
+    ensure!(exists, "dataset not found at {}", self.dataset.display());
+
+    // 2. Verify it’s a file (not a directory or symlink to dir)
+    let metadata = self
+      .dataset
+      .metadata()
+      .into_diagnostic()
+      .wrap_err("Failed to retrieve dataset metadata")?;
+    ensure!(
+      metadata.is_file(),
+      "dataset path is not a file: {}",
+      self.dataset.display()
+    );
+
+    Ok(())
+  }
+
+  /// Returns an error if the dataset path is missing or not a file.
+  pub fn ensure_import_exists(&self) -> TheResult<()> {
+    // 1. Probe existence, surfacing any I/O errors
+    let exists = self
+      .import_path()
+      .try_exists()
+      .into_diagnostic()
+      .wrap_err("Failed to check import path existence")?;
+    // .context("failed to check import path existence")?;
+    ensure!(
+      exists,
+      "import file not found at {}",
+      self.dataset.display()
+    );
+
+    // 2. Verify it’s a file (not a directory or symlink to dir)
+    let metadata = self
+      .dataset
+      .metadata()
+      .into_diagnostic()
+      .wrap_err("Failed to retrieve metadata of the imported dataset")?;
+    // .context("failed to retrieve metadata of the imported dataset")?;
+    ensure!(
+      metadata.is_file(),
+      "the imported dataset path is not a file: {}",
+      self.dataset.display()
+    );
+
+    Ok(())
+  }
+
   /// Check if the import directory exists, create it if it doesn't
   pub fn ensure_import_dir(&self) -> TheResult<()> {
     if !self.import_dir.exists() {
-      std::fs::create_dir_all(&self.import_dir)
-        .context("Failed to create import directory")?;
+      create_dir_all(&self.import_dir)
+        .into_diagnostic()
+        .wrap_err("Failed to create import directory")?;
+      // .context("Failed to create import directory")?;
     }
     Ok(())
   }
 
   /// Get file size in bytes
   pub fn file_size(&self) -> TheResult<u64> {
-    let meta =
-      metadata(&self.dataset).context("Failed to get file metadata")?;
+    let meta = metadata(&self.dataset)
+      .into_diagnostic()
+      .wrap_err("Failed to get file metadata")?;
+    // .context("Failed to get file metadata")?;
     Ok(meta.len())
   }
 
@@ -220,7 +292,9 @@ pub fn get_dataset(name: &str) -> TheResult<PathBuf> {
 
   // Try to read its metadata (this errors if it doesn't exist or isn't accessible)
   let meta = metadata(&file)
-    .context(format!("Failed to stat dataset file: {file:?}"))?;
+    .into_diagnostic()
+    .wrap_err(format!("Failed to stat dataset file: {file:?}"))?;
+  // .context(format!("Failed to stat dataset file: {file:?}"))?;
 
   // Ensure it's actually a file (not a directory, symlink, etc.)
   ensure!(
@@ -232,16 +306,10 @@ pub fn get_dataset(name: &str) -> TheResult<PathBuf> {
   Ok(file)
 }
 
-/// Map user-friendly names to actual dataset filenames
-pub fn get_dataset_mapping(key: &str) -> Option<&'static str> {
-  match key {
-    "profiles" => Some("name.basics"),
-    "variants" => Some("title.akas"),
-    "title" => Some("title.basics"),
-    "crew" => Some("title.crew"),
-    "series" => Some("title.episode"),
-    "credits" => Some("title.principals"),
-    "ratings" => Some("title.ratings"),
-    _ => None,
-  }
+/// Lookup dataset filename by display name (case-insensitive)
+pub fn get_dataset_mapping(display_name: &str) -> Option<&'static str> {
+  DATASETS
+    .iter()
+    .find(|(pretty, _)| pretty.eq_ignore_ascii_case(display_name))
+    .map(|(_, filename)| *filename)
 }
