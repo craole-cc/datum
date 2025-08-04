@@ -17,7 +17,7 @@ members = [
   # "components/erks/macros",
   "components/extractor",
   "components/imdb",
-  "components/utils",
+  "components/util",
   # "development",
   # "projects",
   "projects/imdb",
@@ -31,7 +31,7 @@ unused = { level = "allow", priority = -2 }
 
 [workspace.dependencies]
 # -- Internal
-utils = { path = "components/utils" }
+util = { path = "components/util" }
 downloader = { path = "components/downloader" }
 erks = { path = "components/erks", features = ["fancy"] }
 extractor = { path = "components/extractor" }
@@ -49,6 +49,7 @@ tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
 # colored = "3.0.0"
 owo-colors = "4.2.2"
+indicatif = "0.18.0"
 
 # -- Macros & Constructors
 # cfg-if = "1.0.1"

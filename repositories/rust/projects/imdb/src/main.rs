@@ -1,38 +1,27 @@
 // -- Application (main.rs) -- //
-use erks::*; // Errors and Tracing
-use utils::*; // Reuable functions
+
+use erks::{Context, trace_call};
 
 #[tokio::main]
-async fn main() -> Result<()> {
+async fn main() -> erks::Result<()> {
   let desc = env!("CARGO_PKG_DESCRIPTION");
   let name = env!("CARGO_PKG_NAME");
   let vr3n = env!("CARGO_PKG_VERSION");
-  print_banner(desc, name, vr3n);
-  set_tracing_debug();
-  set_panic_hook();
+  util::print_banner(desc, name, vr3n);
 
-  // match imdb_cli::run().await {
-  //   Ok(_) => {}
-  //   Err(e) => eprintln!("{e:?}"),
-  // }
+  erks::set_tracing_trace();
+  erks::set_panic_hook();
 
-  // match imdb::config::init() {
-  //   Ok(_) => {}
-  //   Err(e) => eprintln!("{e:?}"),
-  // }
-  // bail!(imdb::config::init())?;
-  // if vr3n != "pop" {
-  //   bail!("permission denied for accessing {vr3n}");
-  // }
-  imdb_cli::run().await;
-  imdb::config::init()
-    .wrap_err("Encountered issues initializing the config")?;
-  // imdb::config::init().bail_with_context("Config initialization failed")?;
-  // imdb::config::init().log_error_with_context("Static string".to_string());
-  // imdb::config::init()
-  //   .log_error_with_context(format!("Config failed at {}", line!()));
-
+  // imdb_cli::run().await;
+  // trace_call!(
+  //   imdb::pipeline::execute().await?;
+  // )
+  match trace_call!(
+    imdb::pipeline::execute().await.wrap_err("Pipeline failure")
+  ) {
+    Ok(_) => println!("Success"),
+    Err(e) => eprintln!("Error: {e:?}"),
+  }
   Ok(())
 }
-
 // -- End of the Application module (main.rs) -- //

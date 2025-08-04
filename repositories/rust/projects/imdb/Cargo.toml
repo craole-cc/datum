@@ -18,14 +18,13 @@ erks = { workspace = true }
 extractor = { workspace = true }
 imdb-cli = { workspace = true }
 imdb-dataset = { workspace = true }
-utils = { workspace = true }
+util = { workspace = true }
 
 #| External
 deltalake = { version = "0.27.0", features = ["datafusion"] }
 directories = { workspace = true }
-futures = { workspace = true }
 miette = { workspace = true, features = ["fancy"] }
 serde = { workspace = true }
 tokio = { workspace = true }
-# tracing = { workspace = true }
+# regex = { workspace = true }
 # tracing-subscriber = { workspace = true }

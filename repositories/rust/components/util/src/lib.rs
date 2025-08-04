@@ -1,10 +1,15 @@
 mod delimiter;
 mod examples;
+mod file;
 mod print;
 mod timer;
 
 pub use delimiter::*;
+pub use file::*;
+// pub use futures::future::join_all;
 pub use print::*;
+pub use regex::{Regex, escape};
+pub use serde::{Deserialize, Serialize};
 pub use std::{
   any::Any,
   collections::{HashMap, HashSet},

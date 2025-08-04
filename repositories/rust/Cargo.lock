@@ -2234,13 +2234,12 @@ dependencies = [
  "downloader",
  "erks",
  "extractor",
- "futures",
  "imdb-cli",
  "imdb-dataset",
  "miette",
  "serde",
  "tokio",
- "utils",
+ "util",
 ]
 
 [[package]]
@@ -2983,7 +2982,7 @@ dependencies = [
  "tokio",
  "tracing",
  "tracing-subscriber",
- "utils",
+ "util",
 ]
 
 [[package]]
@@ -4202,12 +4201,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821"
 
 [[package]]
-name = "utils"
+name = "util"
 version = "0.1.0"
 dependencies = [
  "erks",
+ "regex",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
 ]
 

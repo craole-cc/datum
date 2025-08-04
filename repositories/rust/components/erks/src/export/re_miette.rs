@@ -50,14 +50,14 @@ where
   fn log_error_and_continue(self) {
     if let Err(e) = self {
       let report = e.into();
-      eprintln!("{:?}", report);
+      eprintln!("{report:?}");
     }
   }
 
   fn log_error_with_context(self, context: impl Into<String>) {
     if let Err(e) = self {
       let report = e.into().wrap_err(context.into());
-      eprintln!("{:?}", report);
+      eprintln!("{report:?}");
     }
   }
 
@@ -153,210 +153,483 @@ macro_rules! error_msg {
     ))
   };
 }
-/// Creates a comprehensive error with rich diagnostics, tracing, and location info
+
+// /// Creates a comprehensive error with rich diagnostics, tracing, and location info
+// ///
+// /// This macro combines automatic error logging, custom messages, help text, error codes,
+// /// severity levels, labels, and precise source location tracking. The tracing level
+// /// is automatically selected based on the severity, and code/labels appear on the log line.
+// ///
+// /// # Features
+// /// - Automatic logging with appropriate tracing level based on severity
+// /// - Code and label information in the tracing output
+// /// - Source location capture (file:line:column)
+// /// - Rich miette diagnostics with help text, error codes, severity, and labels
+// /// - Preserves original error in the chain
+// ///
+// /// # Output Format
+// /// ```text
+// /// ERROR: FILE_OPEN_ERROR
+// ///   × Failed to open file for delimiter detection (at src/config.rs:42:15)
+// ///
+// ///       Caused by: No such file or directory (os error 2)
+// ///   help: Ensure the file exists and you have read permissions
+// /// ```
+// #[macro_export]
+// macro_rules! enriched_error {
+//   // Helper macro to choose tracing level and format message
+//   (@log $severity:expr, $code:expr, $label:expr) => {
+//     match $severity {
+//       Severity::Error => error!("{} {}", $code.on_red(), $label.red()),
+//       Severity::Warning | Severity::Advice => warn!("{} {}", $code.on_yellow(), $label.yellow()),
+//     }
+//   };
+
+//   (@log $severity:expr, $code:expr) => {
+//     match $severity {
+//       Severity::Error => error!("{}", $code.red()),
+//       Severity::Warning | Severity::Advice => warn!("{}", $code.yellow()),
+//     }
+//   };
+
+//   (@log $severity:expr) => {
+//     match $severity {
+//       Severity::Error => error!(""),
+//       Severity::Warning | Severity::Advice => warn!(""),
+//     }
+//   };
+
+//   // Full version with all options
+//   ($expr:expr, $msg:expr, code = $code:expr, help = $help:expr, severity = $severity:expr, labels = $labels:expr) => {{
+//     let location = format!("{}:{}:{}", file!(), line!(), column!());
+//     // Extract first label text if available
+//     let label_text = $labels.first().map(|l| l.label().unwrap_or("")).unwrap_or("");
+//     enriched_error!(@log $severity, $code, label_text);
+//     $expr.into_diagnostic().map_err(|original_error| {
+//       miette!(
+//         // code = $code,
+//         help = $help,
+//         severity = $severity,
+//         labels = $labels,
+//         "{} (at {})\n\nCaused by: {}",
+//         $msg,
+//         location,
+//         original_error
+//       )
+//     })
+//   }};
+
+//   // Code, help, and severity
+//   ($expr:expr, $msg:expr, code = $code:expr, help = $help:expr, severity = $severity:expr) => {{
+//     let location = format!("{}:{}:{}", file!(), line!(), column!());
+//     enriched_error!(@log $severity, $code);
+//     $expr.into_diagnostic().map_err(|original_error| {
+//       miette!(
+//         // code = $code,
+//         help = $help,
+//         severity = $severity,
+//         "{} (at {})\n\nCaused by: {}",
+//         $msg,
+//         location,
+//         original_error
+//       )
+//     })
+//   }};
+
+//   // Code, help, and labels (default to Error severity)
+//   ($expr:expr, $msg:expr, code = $code:expr, help = $help:expr, labels = $labels:expr) => {{
+//     let location = format!("{}:{}:{}", file!(), line!(), column!());
+//     let label_text = $labels.first().map(|l| l.label().unwrap_or("")).unwrap_or("");
+//     error!("{} {}", $code, label_text);
+//     $expr.into_diagnostic().map_err(|original_error| {
+//       miette!(
+//         // code = $code,
+//         help = $help,
+//         labels = $labels,
+//         "{} (at {})\n\nCaused by: {}",
+//         $msg,
+//         location,
+//         original_error
+//       )
+//     })
+//   }};
+
+//   // Help and severity
+//   ($expr:expr, $msg:expr, help = $help:expr, severity = $severity:expr) => {{
+//     let location = format!("{}:{}:{}", file!(), line!(), column!());
+//     enriched_error!(@log $severity);
+//     $expr.into_diagnostic().map_err(|original_error| {
+//       miette!(
+//         help = $help,
+//         severity = $severity,
+//         "{} (at {})\n\nCaused by: {}",
+//         $msg,
+//         location,
+//         original_error
+//       )
+//     })
+//   }};
+
+//   // Help and labels (default to Error severity)
+//   ($expr:expr, $msg:expr, help = $help:expr, labels = $labels:expr) => {{
+//     let location = format!("{}:{}:{}", file!(), line!(), column!());
+//     let label_text = $labels.first().map(|l| l.label().unwrap_or("")).unwrap_or("");
+//     error!("{}", label_text);
+//     $expr.into_diagnostic().map_err(|original_error| {
+//       miette!(
+//         help = $help,
+//         labels = $labels,
+//         "{} (at {})\n\nCaused by: {}",
+//         $msg,
+//         location,
+//         original_error
+//       )
+//     })
+//   }};
+
+//   // Just severity
+//   ($expr:expr, $msg:expr, severity = $severity:expr) => {{
+//     let location = format!("{}:{}:{}", file!(), line!(), column!());
+//     enriched_error!(@log $severity);
+//     $expr.into_diagnostic().map_err(|original_error| {
+//       miette!(
+//         severity = $severity,
+//         "{} (at {})\n\nCaused by: {}",
+//         $msg,
+//         location,
+//         original_error
+//       )
+//     })
+//   }};
+
+//   // Just labels (default to Error severity)
+//   ($expr:expr, $msg:expr, labels = $labels:expr) => {{
+//     let location = format!("{}:{}:{}", file!(), line!(), column!());
+//     let label_text = $labels.first().map(|l| l.label().unwrap_or("")).unwrap_or("");
+//     error!("{}", label_text);
+//     $expr.into_diagnostic().map_err(|original_error| {
+//       miette!(
+//         labels = $labels,
+//         "{} (at {})\n\nCaused by: {}",
+//         $msg,
+//         location,
+//         original_error
+//       )
+//     })
+//   }};
+
+//   // Just code (default to Error severity)
+//   ($expr:expr, $msg:expr, code = $code:expr) => {{
+//     let location = format!("{}:{}:{}", file!(), line!(), column!());
+//     error!("{}", $code);
+//     $expr.into_diagnostic().map_err(|original_error| {
+//       miette!(
+//         // code = $code,
+//         "{} (at {})\n\nCaused by: {}",
+//         $msg,
+//         location,
+//         original_error
+//       )
+//     })
+//   }};
+
+//   // Original variants (unchanged for backward compatibility)
+//   ($expr:expr, $msg:expr, help = $help:expr) => {{
+//     let location = format!("{}:{}:{}", file!(), line!(), column!());
+//     error!("");
+//     $expr.into_diagnostic().map_err(|original_error| {
+//       miette!(
+//         help = $help,
+//         "{} (at {})\n\nCaused by: {}",
+//         $msg,
+//         location,
+//         original_error
+//       )
+//     })
+//   }};
+
+//   ($expr:expr, $msg:expr) => {{
+//     let location = format!("{}:{}:{}", file!(), line!(), column!());
+//     error!("");
+//     $expr.into_diagnostic().map_err(|original_error| {
+//       miette!(
+//         "{} (at {})\n\nCaused by: {}",
+//         $msg,
+//         location,
+//         original_error
+//       )
+//     })
+//   }};
+// }
+
+/// A macro for enriching errors with contextual information, logging, and miette diagnostics.
 ///
-/// This macro combines automatic error logging, custom messages, help text, error codes,
-/// severity levels, labels, and precise source location tracking. The tracing level
-/// is automatically selected based on the severity, and code/labels appear on the log line.
+/// This macro wraps expressions that return `Result` types and enhances any errors with:
+/// - Source location information (file, line, column)
+/// - Custom error messages and help text
+/// - Severity levels for appropriate logging
+/// - Optional labels for source code spans
+/// - Colored console output based on severity
 ///
-/// # Features
-/// - Automatic logging with appropriate tracing level based on severity
-/// - Code and label information in the tracing output
-/// - Source location capture (file:line:column)
-/// - Rich miette diagnostics with help text, error codes, severity, and labels
-/// - Preserves original error in the chain
+/// The macro only logs when an actual error occurs, preventing spurious error messages
+/// for successful operations.
 ///
-/// # Output Format
-/// ```text
-/// ERROR: FILE_OPEN_ERROR
-///   × Failed to open file for delimiter detection (at src/config.rs:42:15)
+/// # Requirements
 ///
-///       Caused by: No such file or directory (os error 2)
-///   help: Ensure the file exists and you have read permissions
+/// This macro requires the following dependencies:
+/// ```toml
+/// [dependencies]
+/// miette = { version = "5.0", features = ["fancy"] }
+/// tracing = "0.1"
+/// colored = "2.0"
+/// ```
+///
+/// # Examples
+///
+/// ## Basic usage with help text
+/// ```rust
+/// use std::fs::File;
+/// use miette::{IntoDiagnostic, Result, Severity};
+///
+/// # // Mock the macro for doctest
+/// # macro_rules! enriched_error {
+/// #     ($expr:expr, $msg:expr, help = $help:expr) => {
+/// #         $expr.into_diagnostic().map_err(|e| miette::miette!(help = $help, "{}", $msg))
+/// #     };
+/// # }
+///
+/// fn open_config() -> Result<File> {
+///     enriched_error!(
+///         File::open("config.toml"),
+///         "Failed to open configuration file",
+///         help = "Make sure config.toml exists in the current directory"
+///     )
+/// }
+/// ```
+///
+/// ## With severity and custom code
+/// ```rust
+/// use std::fs::File;
+/// use miette::{IntoDiagnostic, Result, Severity};
+///
+/// # macro_rules! enriched_error {
+/// #     ($expr:expr, $msg:expr, code = $code:expr, severity = $severity:expr) => {
+/// #         $expr.into_diagnostic().map_err(|e| miette::miette!(severity = $severity, "{}", $msg))
+/// #     };
+/// # }
+///
+/// fn open_optional_file() -> Result<File> {
+///     enriched_error!(
+///         File::open("optional.txt"),
+///         "Optional file not found",
+///         code = format!("OPTIONAL_FILE_MISSING"),
+///         severity = Severity::Warning
+///     )
+/// }
+/// ```
+///
+/// ## With labels for source code spans
+/// ```rust
+/// use std::fs::File;
+/// use miette::{IntoDiagnostic, Result, LabeledSpan, Severity};
+///
+/// # macro_rules! enriched_error {
+/// #     ($expr:expr, $msg:expr, labels = $labels:expr) => {
+/// #         $expr.into_diagnostic().map_err(|e| miette::miette!(labels = $labels, "{}", $msg))
+/// #     };
+/// # }
+///
+/// fn parse_with_context() -> Result<()> {
+///     let labels = vec![LabeledSpan::at(10..20, "problematic section")];
+///     enriched_error!(
+///         std::str::from_utf8(&[0xFF, 0xFE]),
+///         "Invalid UTF-8 sequence detected",
+///         labels = labels
+///     )?;
+///     Ok(())
+/// }
 /// ```
 #[macro_export]
 macro_rules! enriched_error {
-  // Helper macro to choose tracing level and format message
-  (@log $severity:expr, $code:expr, $label:expr) => {
-    // match $severity {
-    //   Severity::Error => error!("{} {}", $code.on_red(), $label.red()),
-    //   Severity::Warning | Severity::Advice => warn!("{} {}", $code.on_yellow(), $label.yellow()),
-    // }
-  };
+    // Helper macro to choose tracing level and format message
+    (@log $severity:expr, $code:expr, $label:expr) => {
+        match $severity {
+            Severity::Error => error!("{} {}", $code.on_red(), $label.red()),
+            Severity::Warning | Severity::Advice => warn!("{} {}", $code.on_yellow(), $label.yellow()),
+        }
+    };
 
-  (@log $severity:expr, $code:expr) => {
-    // match $severity {
-    //   Severity::Error => error!("{}", $code.red()),
-    //   Severity::Warning | Severity::Advice => warn!("{}", $code.yellow()),
-    // }
-  };
+    (@log $severity:expr, $code:expr) => {
+        match $severity {
+            Severity::Error => error!("{}", $code.red()),
+            Severity::Warning | Severity::Advice => warn!("{}", $code.yellow()),
+        }
+    };
 
-  (@log $severity:expr) => {
-    // match $severity {
-    //   Severity::Error => error!(""),
-    //   Severity::Warning | Severity::Advice => warn!(""),
-    // }
-  };
+    (@log $severity:expr) => {
+        match $severity {
+            Severity::Error => error!("Operation failed"),
+            Severity::Warning | Severity::Advice => warn!("Operation failed"),
+        }
+    };
 
-  // Full version with all options
-  ($expr:expr, $msg:expr, code = $code:expr, help = $help:expr, severity = $severity:expr, labels = $labels:expr) => {{
-    let location = format!("{}:{}:{}", file!(), line!(), column!());
-    // Extract first label text if available
-    let label_text = $labels.first().map(|l| l.label().unwrap_or("")).unwrap_or("");
-    enriched_error!(@log $severity, $code, label_text);
-    $expr.into_diagnostic().map_err(|original_error| {
-      miette!(
-        code = $code,
-        help = $help,
-        severity = $severity,
-        labels = $labels,
-        "{} (at {})\n\nCaused by: {}",
-        $msg,
-        location,
-        original_error
-      )
-    })
-  }};
+    // Full version with all options
+    ($expr:expr, $msg:expr, code = $code:expr, help = $help:expr, severity = $severity:expr, labels = $labels:expr) => {{
+        let location = format!("{}:{}:{}", file!(), line!(), column!());
+        $expr.into_diagnostic().map_err(|original_error| {
+            // Only log when there's actually an error
+            let label_text = $labels.first().map(|l| l.label().unwrap_or("")).unwrap_or("");
+            enriched_error!(@log $severity, $code, label_text);
 
-  // Code, help, and severity
-  ($expr:expr, $msg:expr, code = $code:expr, help = $help:expr, severity = $severity:expr) => {{
-    let location = format!("{}:{}:{}", file!(), line!(), column!());
-    enriched_error!(@log $severity, $code);
-    $expr.into_diagnostic().map_err(|original_error| {
-      miette!(
-        code = $code,
-        help = $help,
-        severity = $severity,
-        "{} (at {})\n\nCaused by: {}",
-        $msg,
-        location,
-        original_error
-      )
-    })
-  }};
+            miette!(
+                help = $help,
+                severity = $severity,
+                labels = $labels,
+                "{} (at {})\n\nCaused by: {}",
+                $msg,
+                location,
+                original_error
+            )
+        })
+    }};
 
-  // Code, help, and labels (default to Error severity)
-  ($expr:expr, $msg:expr, code = $code:expr, help = $help:expr, labels = $labels:expr) => {{
-    let location = format!("{}:{}:{}", file!(), line!(), column!());
-    let label_text = $labels.first().map(|l| l.label().unwrap_or("")).unwrap_or("");
-    error!("{} {}", $code, label_text);
-    $expr.into_diagnostic().map_err(|original_error| {
-      miette!(
-        code = $code,
-        help = $help,
-        labels = $labels,
-        "{} (at {})\n\nCaused by: {}",
-        $msg,
-        location,
-        original_error
-      )
-    })
-  }};
+    // Code, help, and severity
+    ($expr:expr, $msg:expr, code = $code:expr, help = $help:expr, severity = $severity:expr) => {{
+        let location = format!("{}:{}:{}", file!(), line!(), column!());
+        $expr.into_diagnostic().map_err(|original_error| {
+            enriched_error!(@log $severity, $code);
+            miette!(
+                help = $help,
+                severity = $severity,
+                "{} (at {})\n\nCaused by: {}",
+                $msg,
+                location,
+                original_error
+            )
+        })
+    }};
 
-  // Help and severity
-  ($expr:expr, $msg:expr, help = $help:expr, severity = $severity:expr) => {{
-    let location = format!("{}:{}:{}", file!(), line!(), column!());
-    enriched_error!(@log $severity);
-    $expr.into_diagnostic().map_err(|original_error| {
-      miette!(
-        help = $help,
-        severity = $severity,
-        "{} (at {})\n\nCaused by: {}",
-        $msg,
-        location,
-        original_error
-      )
-    })
-  }};
+    // Code, help, and labels (default to Error severity)
+    ($expr:expr, $msg:expr, code = $code:expr, help = $help:expr, labels = $labels:expr) => {{
+        let location = format!("{}:{}:{}", file!(), line!(), column!());
+        $expr.into_diagnostic().map_err(|original_error| {
+            let label_text = $labels.first().map(|l| l.label().unwrap_or("")).unwrap_or("");
+            error!("{} {}", $code, label_text);
+            miette::miette!(
+                help = $help,
+                labels = $labels,
+                "{} (at {})\n\nCaused by: {}",
+                $msg,
+                location,
+                original_error
+            )
+        })
+    }};
 
-  // Help and labels (default to Error severity)
-  ($expr:expr, $msg:expr, help = $help:expr, labels = $labels:expr) => {{
-    let location = format!("{}:{}:{}", file!(), line!(), column!());
-    let label_text = $labels.first().map(|l| l.label().unwrap_or("")).unwrap_or("");
-    error!("{}", label_text);
-    $expr.into_diagnostic().map_err(|original_error| {
-      miette!(
-        help = $help,
-        labels = $labels,
-        "{} (at {})\n\nCaused by: {}",
-        $msg,
-        location,
-        original_error
-      )
-    })
-  }};
+    // Help and severity
+    ($expr:expr, $msg:expr, help = $help:expr, severity = $severity:expr) => {{
+        let location = format!("{}:{}:{}", file!(), line!(), column!());
+        $expr.into_diagnostic().map_err(|original_error| {
+            enriched_error!(@log $severity);
+            miette::miette!(
+                help = $help,
+                severity = $severity,
+                "{} (at {})\n\nCaused by: {}",
+                $msg,
+                location,
+                original_error
+            )
+        })
+    }};
 
-  // Just severity
-  ($expr:expr, $msg:expr, severity = $severity:expr) => {{
-    let location = format!("{}:{}:{}", file!(), line!(), column!());
-    enriched_error!(@log $severity);
-    $expr.into_diagnostic().map_err(|original_error| {
-      miette!(
-        severity = $severity,
-        "{} (at {})\n\nCaused by: {}",
-        $msg,
-        location,
-        original_error
-      )
-    })
-  }};
+    // Help and labels (default to Error severity)
+    ($expr:expr, $msg:expr, help = $help:expr, labels = $labels:expr) => {{
+        let location = format!("{}:{}:{}", file!(), line!(), column!());
+        $expr.into_diagnostic().map_err(|original_error| {
+            let label_text = $labels.first().map(|l| l.label().unwrap_or("")).unwrap_or("");
+            error!("{}", label_text);
+            miette::miette!(
+                help = $help,
+                labels = $labels,
+                "{} (at {})\n\nCaused by: {}",
+                $msg,
+                location,
+                original_error
+            )
+        })
+    }};
 
-  // Just labels (default to Error severity)
-  ($expr:expr, $msg:expr, labels = $labels:expr) => {{
-    let location = format!("{}:{}:{}", file!(), line!(), column!());
-    let label_text = $labels.first().map(|l| l.label().unwrap_or("")).unwrap_or("");
-    error!("{}", label_text);
-    $expr.into_diagnostic().map_err(|original_error| {
-      miette!(
-        labels = $labels,
-        "{} (at {})\n\nCaused by: {}",
-        $msg,
-        location,
-        original_error
-      )
-    })
-  }};
+    // Just severity
+    ($expr:expr, $msg:expr, severity = $severity:expr) => {{
+        let location = format!("{}:{}:{}", file!(), line!(), column!());
+        $expr.into_diagnostic().map_err(|original_error| {
+            enriched_error!(@log $severity);
+            miette::miette!(
+                severity = $severity,
+                "{} (at {})\n\nCaused by: {}",
+                $msg,
+                location,
+                original_error
+            )
+        })
+    }};
 
-  // Just code (default to Error severity)
-  ($expr:expr, $msg:expr, code = $code:expr) => {{
-    let location = format!("{}:{}:{}", file!(), line!(), column!());
-    error!("{}", $code);
-    $expr.into_diagnostic().map_err(|original_error| {
-      miette!(
-        code = $code,
-        "{} (at {})\n\nCaused by: {}",
-        $msg,
-        location,
-        original_error
-      )
-    })
-  }};
+    // Just labels (default to Error severity)
+    ($expr:expr, $msg:expr, labels = $labels:expr) => {{
+        let location = format!("{}:{}:{}", file!(), line!(), column!());
+        $expr.into_diagnostic().map_err(|original_error| {
+            let label_text = $labels.first().map(|l| l.label().unwrap_or("")).unwrap_or("");
+            error!("{}", label_text);
+            miette::miette!(
+                labels = $labels,
+                "{} (at {})\n\nCaused by: {}",
+                $msg,
+                location,
+                original_error
+            )
+        })
+    }};
 
-  // Original variants (unchanged for backward compatibility)
-  ($expr:expr, $msg:expr, help = $help:expr) => {{
-    let location = format!("{}:{}:{}", file!(), line!(), column!());
-    error!("");
-    $expr.into_diagnostic().map_err(|original_error| {
-      miette!(
-        help = $help,
-        "{} (at {})\n\nCaused by: {}",
-        $msg,
-        location,
-        original_error
-      )
-    })
-  }};
+    // Just code (default to Error severity)
+    ($expr:expr, $msg:expr, code = $code:expr) => {{
+        let location = format!("{}:{}:{}", file!(), line!(), column!());
+        $expr.into_diagnostic().map_err(|original_error| {
+            error!("{}", $code);
+            miette::miette!(
+                "{} (at {})\n\nCaused by: {}",
+                $msg,
+                location,
+                original_error
+            )
+        })
+    }};
 
-  ($expr:expr, $msg:expr) => {{
-    let location = format!("{}:{}:{}", file!(), line!(), column!());
-    error!("");
-    $expr.into_diagnostic().map_err(|original_error| {
-      miette!(
-        "{} (at {})\n\nCaused by: {}",
-        $msg,
-        location,
-        original_error
-      )
-    })
-  }};
+    // Just help text
+    ($expr:expr, $msg:expr, help = $help:expr) => {{
+        let location = format!("{}:{}:{}", file!(), line!(), column!());
+        $expr.into_diagnostic().map_err(|original_error| {
+            error!("Operation failed");
+            miette::miette!(
+                help = $help,
+                "{} (at {})\n\nCaused by: {}",
+                $msg,
+                location,
+                original_error
+            )
+        })
+    }};
+
+    // Minimal version - just message
+    ($expr:expr, $msg:expr) => {{
+        let location = format!("{}:{}:{}", file!(), line!(), column!());
+        $expr.into_diagnostic().map_err(|original_error| {
+            error!("Operation failed");
+            miette::miette!(
+                "{} (at {})\n\nCaused by: {}",
+                $msg,
+                location,
+                original_error
+            )
+        })
+    }};
 }

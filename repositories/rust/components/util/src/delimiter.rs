@@ -1,39 +1,36 @@
-use super::*;
+use crate::*;
 pub fn detect_delimiter(path: &Path) -> Result<u8> {
   let result = || -> Result<u8> {
-    let file_labels = [miette::LabeledSpan::at(
-      0..path.to_string_lossy().len(),
-      "file path",
-    )];
+    let file_labels = [LabeledSpan::at(0..path.to_string_lossy().len(), "")];
     let file = enriched_error!(
       File::open(path),
       "Failed to open file for delimiter detection",
-      code = "FILE_OPEN_ERROR",
+      code = "std::fs::File::open",
       help = "Ensure the file exists and you have read permissions. Check the file path is correct.",
-      severity = miette::Severity::Error,
-      labels = file_labels
+      severity = Severity::Error,
+      labels = &file_labels
     )?;
 
     let mut reader = BufReader::new(file);
     let mut first_line = String::new();
-    let read_labels = [miette::LabeledSpan::at(0..0, "first line")];
+    let read_labels = [LabeledSpan::at(0..0, "first line")];
     enriched_error!(
       reader.read_line(&mut first_line),
       "Failed to read first line for delimiter detection",
-      code = "FILE_READ_ERROR",
+      code = "FILE_READ",
       help = "File may be empty, corrupted, or contain invalid UTF-8. Try opening the file in a text editor to verify its contents.",
-      severity = miette::Severity::Error,
-      labels = read_labels
+      severity = Severity::Error,
+      labels = &read_labels
     )?;
 
     // Check if file is empty
     if first_line.trim().is_empty() {
-      return Err(miette::miette!(
-        code = "EMPTY_FILE_ERROR",
+      return Err(miette!(
+        code = "EMPTY_FILE",
         help =
           "Provide a file with at least one line of data to detect delimiters",
-        severity = miette::Severity::Warning,
-        labels = vec![miette::LabeledSpan::at(0..0, "empty content")],
+        severity = Severity::Warning,
+        labels = vec![LabeledSpan::at(0..0, "empty content")],
         "Cannot detect delimiter: file appears to be empty"
       ));
     }
@@ -69,16 +66,16 @@ pub fn detect_delimiter(path: &Path) -> Result<u8> {
       }
       (0, 0, 0, 0) => {
         warn!("No delimiters found, defaulting to comma");
-        Err(miette::miette!(
+        Err(miette!(
           code = "NO_DELIMITER_FOUND",
           help = "The file may not be a delimited format, or it might use an unsupported delimiter. Supported delimiters: comma (,), tab (\\t), pipe (|), semicolon (;)",
-          severity = miette::Severity::Warning,
+          severity = Severity::Warning,
           labels = vec![
-            miette::LabeledSpan::at(
+            LabeledSpan::at(
               0..first_line.len().saturating_sub(1),
               "analyzed content"
             ),
-            miette::LabeledSpan::at(0..0, "no delimiters found")
+            LabeledSpan::at(0..0, "no delimiters found")
           ],
           "Could not detect delimiter: no common delimiters found in first line"
         ))
@@ -88,16 +85,16 @@ pub fn detect_delimiter(path: &Path) -> Result<u8> {
         let analysis = format!(
           "commas:{comma_count}, tabs:{tab_count}, pipes:{pipe_count}, semicolons:{semicolon_count}"
         );
-        Err(miette::miette!(
+        Err(miette!(
           code = "AMBIGUOUS_DELIMITER",
           help = "Multiple delimiters found with similar counts. Consider manually specifying the delimiter.",
-          severity = miette::Severity::Warning,
+          severity = Severity::Warning,
           labels = vec![
-            miette::LabeledSpan::at(
+            LabeledSpan::at(
               0..first_line.len().saturating_sub(1),
               "analyzed line"
             ),
-            miette::LabeledSpan::at(0..analysis.len(), "delimiter counts")
+            LabeledSpan::at(0..analysis.len(), "delimiter counts")
           ],
           "Ambiguous delimiter detection: {}",
           analysis
@@ -107,5 +104,5 @@ pub fn detect_delimiter(path: &Path) -> Result<u8> {
     }
   };
 
-  trace_fn!("assume_delimiter", result())
+  trace_fn!("detect_delimiter", result())
 }

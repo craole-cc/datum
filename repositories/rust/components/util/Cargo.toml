@@ -1,5 +1,5 @@
 [package]
-name = "utils"
+name = "util"
 description = "Datum - Simple Utilities"
 version = { workspace = true }
 edition = { workspace = true }
@@ -15,3 +15,8 @@ erks = { workspace = true }
 serde_json = { workspace = true }
 serde = { workspace = true }
 tokio = { workspace = true }
+# futures = { workspace = true }
+regex = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }
