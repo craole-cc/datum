@@ -24,7 +24,7 @@ mod tests {
     assert!(error_string.contains("Reading config file"));
     assert!(error_string.contains(file!()));
 
-    println!("with_context test error: {}", error_string);
+    println!("with_context test error: {error_string}");
   }
 
   #[test]
@@ -44,8 +44,8 @@ mod tests {
     // Line numbers should be different
     assert_ne!(error1_string, error2_string);
 
-    println!("First location error: {}", error1_string);
-    println!("Second location error: {}", error2_string);
+    println!("First location error: {error1_string}");
+    println!("Second location error: {error2_string}");
   }
 
   #[test]
@@ -54,13 +54,13 @@ mod tests {
     let located_error =
       custom_err.with_source_location(file!(), line!(), column!());
 
-    let error_string = format!("{:?}", located_error);
+    let error_string = format!("{located_error:?}");
 
     // Should contain location information
     assert!(error_string.contains("Error originated at"));
     assert!(error_string.contains(file!()));
 
-    println!("with_location trait test: {}", error_string);
+    println!("with_location trait test: {error_string}");
   }
 
   #[test]
@@ -71,7 +71,7 @@ mod tests {
       .unwrap_err()
       .with_source_location(file!(), line!(), column!());
 
-    let error_string = format!("{:?}", located_error);
+    let error_string = format!("{located_error:?}");
 
     // Should contain both the IO error and location info
     assert!(error_string.contains("Error originated at"));
@@ -80,20 +80,20 @@ mod tests {
         || error_string.contains("cannot find the file")
     );
 
-    println!("Chained location test: {}", error_string);
+    println!("Chained location test: {error_string}");
   }
 
   #[test]
   fn test_error_at_macro() {
     let error = error_at!("Something went wrong with value: {}", 42);
-    let error_string = format!("{:?}", error);
+    let error_string = format!("{error:?}");
 
     // Should contain location and formatted message
     assert!(error_string.contains("Error at"));
     assert!(error_string.contains("Something went wrong with value: 42"));
     assert!(error_string.contains(file!()));
 
-    println!("error_at macro test: {}", error_string);
+    println!("error_at macro test: {error_string}");
   }
 
   #[test]
@@ -105,7 +105,7 @@ mod tests {
       "timeout"
     );
 
-    let error_string = format!("{:?}", error);
+    let error_string = format!("{error:?}");
 
     // Should contain all diagnostic information
     assert!(error_string.contains("test::error::with_help"));
@@ -114,7 +114,7 @@ mod tests {
     assert!(error_string.contains("Error at"));
     assert!(error_string.contains(file!()));
 
-    println!("diagnostic_error with help test: {}", error_string);
+    println!("diagnostic_error with help test: {error_string}");
   }
 
   #[test]
@@ -125,21 +125,21 @@ mod tests {
       "empty_string"
     );
 
-    let error_string = format!("{:?}", error);
+    let error_string = format!("{error:?}");
 
     // Should contain code and message
     assert!(error_string.contains("test::error::code_only"));
     assert!(error_string.contains("Validation failed for input: empty_string"));
     assert!(error_string.contains("Error at"));
 
-    println!("diagnostic_error code only test: {}", error_string);
+    println!("diagnostic_error code only test: {error_string}");
   }
 
   #[test]
   fn test_with_context_preserves_original_error() {
     let result = with_context!(failing_io_operation(), "File operation");
     let error = result.unwrap_err();
-    let error_string = format!("{:?}", error);
+    let error_string = format!("{error:?}");
 
     // Should contain both context and original IO error details
     assert!(error_string.contains("File operation"));
@@ -148,7 +148,7 @@ mod tests {
         || error_string.contains("cannot find the file")
     );
 
-    println!("Context preservation test: {}", error_string);
+    println!("Context preservation test: {error_string}");
   }
 
   #[test]
@@ -159,13 +159,13 @@ mod tests {
         .wrap_err("Application startup failed");
 
     let error = result.unwrap_err();
-    let error_string = format!("{:?}", error);
+    let error_string = format!("{error:?}");
 
     // Should show error chain
     assert!(error_string.contains("Reading config"));
     assert!(error_string.contains("Application startup failed"));
 
-    println!("Multiple context test: {}", error_string);
+    println!("Multiple context test: {error_string}");
   }
 
   #[test]
@@ -174,16 +174,16 @@ mod tests {
     let error1 = error_at!("First error");
     let error2 = error_at!("Second error");
 
-    let error1_string = format!("{:?}", error1);
-    let error2_string = format!("{:?}", error2);
+    let error1_string = format!("{error1:?}");
+    let error2_string = format!("{error2:?}");
 
     // Should have different line numbers
     assert_ne!(error1_string, error2_string);
     assert!(error1_string.contains("First error"));
     assert!(error2_string.contains("Second error"));
 
-    println!("Location accuracy test 1: {}", error1_string);
-    println!("Location accuracy test 2: {}", error2_string);
+    println!("Location accuracy test 1: {error1_string}");
+    println!("Location accuracy test 2: {error2_string}");
   }
 
   #[tokio::test]
@@ -202,7 +202,7 @@ mod tests {
     assert!(error_string.contains("Async file read"));
     assert!(error_string.contains(file!()));
 
-    println!("Async context test: {}", error_string);
+    println!("Async context test: {error_string}");
   }
 
   #[test]
@@ -216,12 +216,12 @@ mod tests {
 
     // Should be able to use standard miette methods
     let wrapped = error.wrap_err("Outer context");
-    let error_string = format!("{:?}", wrapped);
+    let error_string = format!("{wrapped:?}");
 
     assert!(error_string.contains("integration::test"));
     assert!(error_string.contains("Outer context"));
     assert!(error_string.contains("Integration test failed"));
 
-    println!("Integration test: {}", error_string);
+    println!("Integration test: {error_string}");
   }
 }

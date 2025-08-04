@@ -1,18 +1,38 @@
 // -- Application (main.rs) -- //
+use erks::*; // Errors and Tracing
+use utils::*; // Reuable functions
 
-// region: Main Execution
 #[tokio::main]
-async fn main() -> erks::Result<()> {
+async fn main() -> Result<()> {
   let desc = env!("CARGO_PKG_DESCRIPTION");
   let name = env!("CARGO_PKG_NAME");
   let vr3n = env!("CARGO_PKG_VERSION");
-  utils::print_banner(desc, name, vr3n);
-  erks::set_tracing_debug();
+  print_banner(desc, name, vr3n);
+  set_tracing_debug();
+  set_panic_hook();
 
-  // imdb_cli::run().await?; // TODO: Get instructions from the cli to update the config and proceed
-  imdb::config::init();
+  // match imdb_cli::run().await {
+  //   Ok(_) => {}
+  //   Err(e) => eprintln!("{e:?}"),
+  // }
+
+  // match imdb::config::init() {
+  //   Ok(_) => {}
+  //   Err(e) => eprintln!("{e:?}"),
+  // }
+  // bail!(imdb::config::init())?;
+  // if vr3n != "pop" {
+  //   bail!("permission denied for accessing {vr3n}");
+  // }
+  imdb_cli::run().await;
+  imdb::config::init()
+    .wrap_err("Encountered issues initializing the config")?;
+  // imdb::config::init().bail_with_context("Config initialization failed")?;
+  // imdb::config::init().log_error_with_context("Static string".to_string());
+  // imdb::config::init()
+  //   .log_error_with_context(format!("Config failed at {}", line!()));
+
   Ok(())
 }
-// endregion
 
 // -- End of the Application module (main.rs) -- //

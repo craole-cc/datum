@@ -11,7 +11,7 @@ use std::{
 };
 
 // Re-export tracing for convenience
-pub use tracing::{debug, error, info, trace, warn};
+pub(crate) use erks::*;
 
 /// Configuration for timing behavior across the workspace
 #[derive(Debug, Clone)]

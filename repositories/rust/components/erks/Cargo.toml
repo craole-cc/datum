@@ -12,21 +12,21 @@ name = "erks"
 path = "src/lib.rs"
 
 # Example that uses fancy features (for applications)
-[[example]]
-name = "erks"
-path = "examples/comprehensive.rs"
-required-features = ["fancy"]
+# [[example]]
+# name = "erks"
+# path = "examples/comprehensive.rs"
+# required-features = ["fancy"]
 
 # Example that uses fancy features (for applications)
-[[example]]
-name = "erks_fancy"
-path = "examples/fancy.rs"
-required-features = ["fancy"]
+# [[example]]
+# name = "erks_fancy"
+# path = "examples/fancy.rs"
+# required-features = ["fancy"]
 
 # Example that works without fancy features (for libraries)
-[[example]]
-name = "erks_simple"
-path = "examples/simple.rs"
+# [[example]]
+# name = "erks_simple"
+# path = "examples/simple.rs"
 
 # Integration tests
 [[test]]
@@ -44,6 +44,7 @@ unstable = []
 [dependencies]
 macros = { path = "macros" }
 miette = { workspace = true }
+owo-colors = { workspace = true }
 regex = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }

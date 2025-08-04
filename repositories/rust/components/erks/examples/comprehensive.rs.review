@@ -2,8 +2,9 @@
 // Run with: cargo run --example erks_comprehensive --features fancy
 
 use erks::{
-  Context, Diagnostic, Error, IntoDiagnostic, MietteHandlerOpts,
-  MietteSeverity, Report, Result, WrapErr, miette, set_hook, set_panic_hook,
+  Context, Diagnostic, Error, IntoDiagnostic, MietteHandlerOpts, Report,
+  Result, Severity as MietteSeverity, WrapErr, miette, set_hook,
+  set_panic_hook,
 };
 use std::{
   error::Error as StdError,

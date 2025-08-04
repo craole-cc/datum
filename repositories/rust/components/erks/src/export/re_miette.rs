@@ -1,348 +1,362 @@
+//! Enhanced error handling utilities for miette
+//!
+//! This module provides macros and traits for creating rich error traces
+//! that show the full call path from error origin to caller.
 pub use miette::{
-  Context, Diagnostic, IntoDiagnostic, MietteHandlerOpts, NamedSource, Report,
-  Result, Severity as MietteSeverity, SourceSpan, WrapErr, bail, ensure,
-  miette, set_hook, set_panic_hook,
+  Context, Diagnostic, IntoDiagnostic, LabeledSpan, MietteHandlerOpts,
+  NamedSource, Report, Result, Severity, Severity as MietteSeverity,
+  SourceSpan, WrapErr, bail, ensure, miette, set_hook, set_panic_hook, *,
 };
 
-// pub fn error_with_location
+/// Trait for adding source location information to errors
+///
+/// This trait extends any error type that can be converted to a miette Report
+/// with the ability to tag it with file, line, and column information.
 pub trait WithLocation {
   fn with_source_location(
     self,
     file: &'static str,
     line: u32,
     column: u32,
-  ) -> miette::Report;
+  ) -> Report;
 }
 
 impl<E> WithLocation for E
 where
-  E: Into<miette::Report>,
+  E: Into<Report>,
 {
   fn with_source_location(
     self,
     file: &'static str,
     line: u32,
     column: u32,
-  ) -> miette::Report {
+  ) -> Report {
     self
       .into()
       .wrap_err(format!("Error originated at {file}:{line}:{column}"))
   }
 }
 
-// Helper macro for creating contextual  errors with automatic location
+pub trait ResultLogger<T> {
+  fn log_error_and_continue(self);
+  fn log_error_with_context(self, context: impl Into<String>);
+  fn bail_with_context(self, context: impl Into<String>) -> Result<T>; // No logging
+}
+
+impl<T, E> ResultLogger<T> for Result<T, E>
+where
+  E: Into<Report>,
+{
+  fn log_error_and_continue(self) {
+    if let Err(e) = self {
+      let report = e.into();
+      eprintln!("{:?}", report);
+    }
+  }
+
+  fn log_error_with_context(self, context: impl Into<String>) {
+    if let Err(e) = self {
+      let report = e.into().wrap_err(context.into());
+      eprintln!("{:?}", report);
+    }
+  }
+
+  fn bail_with_context(self, context: impl Into<String>) -> Result<T> {
+    // No logging here - let the original error chain handle it
+    self.map_err(|e| e.into().wrap_err(context.into()))
+  }
+}
+
+/// Tags an error with the location where error handling occurs
+///
+/// # Example
+/// ```rust
+/// let file = tag_error!(
+///   File::open(path)
+///     .into_diagnostic()
+///     .wrap_err("Failed to open file")
+/// )?;
+/// ```
 #[macro_export]
-macro_rules! with_context {
-  ($result:expr, $context:expr) => {
-    $result.into_diagnostic().wrap_err(format!(
-      "{}({}:{})",
-      $context,
+macro_rules! tag_error {
+  ($expr:expr) => {
+    $expr.map_err(|e| e.with_source_location(file!(), line!(), column!()))
+  };
+}
+
+/// Adds function name and location to error trace
+///
+/// Use this to wrap the entire result of a function, showing which function
+/// the error passed through.
+///
+/// # Example
+/// ```rust
+/// pub fn my_function() -> Result<String> {
+///   let result = || -> Result<String> {
+///     // function logic here
+///     Ok("success".to_string())
+///   };
+///   trace_fn!("my_function", result())
+/// }
+/// ```
+#[macro_export]
+macro_rules! trace_fn {
+  ($fn_name:expr, $expr:expr) => {
+    $expr.wrap_err(format!(
+      "In function '{}' at {}:{}:{}",
+      $fn_name,
+      file!(),
+      line!(),
+      column!()
+    ))
+  };
+}
+
+/// Adds call site information to error trace
+///
+/// Use this when calling functions that might return errors to show
+/// where the call was made from.
+///
+/// # Example
+/// ```rust
+/// match trace_call!(some_function_that_might_fail()) {
+///   Ok(result) => println!("Success: {result}"),
+///   Err(e) => eprintln!("Error: {e:?}"),
+/// }
+/// ```
+#[macro_export]
+macro_rules! trace_call {
+  ($expr:expr) => {
+    $expr.wrap_err(format!("Called from {}:{}:{}", file!(), line!(), column!()))
+  };
+}
+
+/// Adds custom context message to error with location
+///
+/// Simple wrapper to add a custom message while preserving the error chain.
+///
+/// # Example
+/// ```rust
+/// let data = error_msg!(
+///   std::fs::read_to_string(path),
+///   "Failed to read configuration file"
+/// )?;
+/// ```
+#[macro_export]
+macro_rules! error_msg {
+  ($expr:expr, $msg:expr) => {
+    $expr.into_diagnostic().wrap_err(format!(
+      "{} (at {}:{})",
+      $msg,
       file!(),
       line!()
     ))
   };
 }
-
-// Helper macro for creating errors with automatic location capture
+/// Creates a comprehensive error with rich diagnostics, tracing, and location info
+///
+/// This macro combines automatic error logging, custom messages, help text, error codes,
+/// severity levels, labels, and precise source location tracking. The tracing level
+/// is automatically selected based on the severity, and code/labels appear on the log line.
+///
+/// # Features
+/// - Automatic logging with appropriate tracing level based on severity
+/// - Code and label information in the tracing output
+/// - Source location capture (file:line:column)
+/// - Rich miette diagnostics with help text, error codes, severity, and labels
+/// - Preserves original error in the chain
+///
+/// # Output Format
+/// ```text
+/// ERROR: FILE_OPEN_ERROR
+///   × Failed to open file for delimiter detection (at src/config.rs:42:15)
+///
+///       Caused by: No such file or directory (os error 2)
+///   help: Ensure the file exists and you have read permissions
+/// ```
 #[macro_export]
-macro_rules! error_at {
-  ($($args:tt)*) => {
-    miette!(
-      "Error at {}:{}: {}",
-      file!(),
-      line!(),
-      format!($($args)*)
-    )
+macro_rules! enriched_error {
+  // Helper macro to choose tracing level and format message
+  (@log $severity:expr, $code:expr, $label:expr) => {
+    // match $severity {
+    //   Severity::Error => error!("{} {}", $code.on_red(), $label.red()),
+    //   Severity::Warning | Severity::Advice => warn!("{} {}", $code.on_yellow(), $label.yellow()),
+    // }
   };
-}
 
-// Helper macro for creating diagnostic errors with automatic location
-#[macro_export]
-macro_rules! diagnostic_error {
-  (code = $code:expr, help = $help:expr, $($args:tt)*) => {
-    miette!(
-      code = $code,
-      help = $help,
-      "Error at {}:{}: {}",
-      file!(),
-      line!(),
-      format!($($args)*)
-    )
+  (@log $severity:expr, $code:expr) => {
+    // match $severity {
+    //   Severity::Error => error!("{}", $code.red()),
+    //   Severity::Warning | Severity::Advice => warn!("{}", $code.yellow()),
+    // }
   };
-  (code = $code:expr, $($args:tt)*) => {
-    miette!(
-      code = $code,
-      "Error at {}:{}: {}",
-      file!(),
-      line!(),
-      format!($($args)*)
-    )
+
+  (@log $severity:expr) => {
+    // match $severity {
+    //   Severity::Error => error!(""),
+    //   Severity::Warning | Severity::Advice => warn!(""),
+    // }
   };
-}
 
-#[cfg(test)]
-mod tests {
-  use super::*;
-  use std::fs;
-  use std::io;
+  // Full version with all options
+  ($expr:expr, $msg:expr, code = $code:expr, help = $help:expr, severity = $severity:expr, labels = $labels:expr) => {{
+    let location = format!("{}:{}:{}", file!(), line!(), column!());
+    // Extract first label text if available
+    let label_text = $labels.first().map(|l| l.label().unwrap_or("")).unwrap_or("");
+    enriched_error!(@log $severity, $code, label_text);
+    $expr.into_diagnostic().map_err(|original_error| {
+      miette!(
+        code = $code,
+        help = $help,
+        severity = $severity,
+        labels = $labels,
+        "{} (at {})\n\nCaused by: {}",
+        $msg,
+        location,
+        original_error
+      )
+    })
+  }};
 
-  // Helper function that returns a standard library error for testing
-  fn failing_io_operation() -> io::Result<String> {
-    fs::read_to_string("nonexistent_file.txt")
-  }
+  // Code, help, and severity
+  ($expr:expr, $msg:expr, code = $code:expr, help = $help:expr, severity = $severity:expr) => {{
+    let location = format!("{}:{}:{}", file!(), line!(), column!());
+    enriched_error!(@log $severity, $code);
+    $expr.into_diagnostic().map_err(|original_error| {
+      miette!(
+        code = $code,
+        help = $help,
+        severity = $severity,
+        "{} (at {})\n\nCaused by: {}",
+        $msg,
+        location,
+        original_error
+      )
+    })
+  }};
 
-  // Helper function that returns a custom error for testing
-  fn custom_error() -> Result<String> {
-    Err(miette!("This is a custom error"))
-  }
+  // Code, help, and labels (default to Error severity)
+  ($expr:expr, $msg:expr, code = $code:expr, help = $help:expr, labels = $labels:expr) => {{
+    let location = format!("{}:{}:{}", file!(), line!(), column!());
+    let label_text = $labels.first().map(|l| l.label().unwrap_or("")).unwrap_or("");
+    error!("{} {}", $code, label_text);
+    $expr.into_diagnostic().map_err(|original_error| {
+      miette!(
+        code = $code,
+        help = $help,
+        labels = $labels,
+        "{} (at {})\n\nCaused by: {}",
+        $msg,
+        location,
+        original_error
+      )
+    })
+  }};
 
-  #[test]
-  fn test_with_context_macro() {
-    let result = with_context!(failing_io_operation(), "Reading config file");
+  // Help and severity
+  ($expr:expr, $msg:expr, help = $help:expr, severity = $severity:expr) => {{
+    let location = format!("{}:{}:{}", file!(), line!(), column!());
+    enriched_error!(@log $severity);
+    $expr.into_diagnostic().map_err(|original_error| {
+      miette!(
+        help = $help,
+        severity = $severity,
+        "{} (at {})\n\nCaused by: {}",
+        $msg,
+        location,
+        original_error
+      )
+    })
+  }};
 
-    assert!(result.is_err());
-    let error_string = format!("{:?}", result.unwrap_err());
+  // Help and labels (default to Error severity)
+  ($expr:expr, $msg:expr, help = $help:expr, labels = $labels:expr) => {{
+    let location = format!("{}:{}:{}", file!(), line!(), column!());
+    let label_text = $labels.first().map(|l| l.label().unwrap_or("")).unwrap_or("");
+    error!("{}", label_text);
+    $expr.into_diagnostic().map_err(|original_error| {
+      miette!(
+        help = $help,
+        labels = $labels,
+        "{} (at {})\n\nCaused by: {}",
+        $msg,
+        location,
+        original_error
+      )
+    })
+  }};
 
-    // Should contain the context and location
-    assert!(error_string.contains("Reading config file"));
-    assert!(error_string.contains("test_with_context_macro"));
-    assert!(error_string.contains(file!()));
+  // Just severity
+  ($expr:expr, $msg:expr, severity = $severity:expr) => {{
+    let location = format!("{}:{}:{}", file!(), line!(), column!());
+    enriched_error!(@log $severity);
+    $expr.into_diagnostic().map_err(|original_error| {
+      miette!(
+        severity = $severity,
+        "{} (at {})\n\nCaused by: {}",
+        $msg,
+        location,
+        original_error
+      )
+    })
+  }};
 
-    println!("with_context test error: {error_string}");
-  }
+  // Just labels (default to Error severity)
+  ($expr:expr, $msg:expr, labels = $labels:expr) => {{
+    let location = format!("{}:{}:{}", file!(), line!(), column!());
+    let label_text = $labels.first().map(|l| l.label().unwrap_or("")).unwrap_or("");
+    error!("{}", label_text);
+    $expr.into_diagnostic().map_err(|original_error| {
+      miette!(
+        labels = $labels,
+        "{} (at {})\n\nCaused by: {}",
+        $msg,
+        location,
+        original_error
+      )
+    })
+  }};
 
-  #[test]
-  fn test_with_context_macro_different_locations() {
-    // First call site
-    let result1 = with_context!(failing_io_operation(), "First location");
-    let error1_string = format!("{:?}", result1.unwrap_err());
+  // Just code (default to Error severity)
+  ($expr:expr, $msg:expr, code = $code:expr) => {{
+    let location = format!("{}:{}:{}", file!(), line!(), column!());
+    error!("{}", $code);
+    $expr.into_diagnostic().map_err(|original_error| {
+      miette!(
+        code = $code,
+        "{} (at {})\n\nCaused by: {}",
+        $msg,
+        location,
+        original_error
+      )
+    })
+  }};
 
-    // Second call site - should show different line number
-    let result2 = with_context!(failing_io_operation(), "Second location");
-    let error2_string = format!("{:?}", result2.unwrap_err());
+  // Original variants (unchanged for backward compatibility)
+  ($expr:expr, $msg:expr, help = $help:expr) => {{
+    let location = format!("{}:{}:{}", file!(), line!(), column!());
+    error!("");
+    $expr.into_diagnostic().map_err(|original_error| {
+      miette!(
+        help = $help,
+        "{} (at {})\n\nCaused by: {}",
+        $msg,
+        location,
+        original_error
+      )
+    })
+  }};
 
-    // Both should contain their respective contexts
-    assert!(error1_string.contains("First location"));
-    assert!(error2_string.contains("Second location"));
-
-    // Line numbers should be different
-    assert_ne!(error1_string, error2_string);
-
-    println!("First location error: {error1_string}");
-    println!("Second location error: {error2_string}");
-  }
-
-  #[test]
-  fn test_with_location_trait() {
-    let custom_err = miette!("Test error");
-    let located_error =
-      custom_err.with_source_location(file!(), line!(), column!());
-
-    let error_string = format!("{located_error:?}");
-
-    // Should contain location information
-    assert!(error_string.contains("Error originated at"));
-    assert!(error_string.contains(file!()));
-    assert!(error_string.contains("test_with_location_trait"));
-
-    println!("with_location trait test: {error_string}");
-  }
-
-  #[test]
-  fn test_with_location_trait_chaining() {
-    let io_error = failing_io_operation();
-    let located_error = io_error
-      .into_diagnostic()
-      .unwrap_err()
-      .with_source_location(file!(), line!(), column!());
-
-    let error_string = format!("{located_error:?}");
-
-    // Should contain both the IO error and location info
-    assert!(error_string.contains("Error originated at"));
-    assert!(
-      error_string.contains("No such file or directory")
-        || error_string.contains("cannot find the file")
-    );
-
-    println!("Chained location test: {error_string}");
-  }
-
-  #[test]
-  fn test_error_at_macro() {
-    let error = error_at!("Something went wrong with value: {}", 42);
-    let error_string = format!("{error:?}");
-
-    // Should contain location and formatted message
-    assert!(error_string.contains("Error at"));
-    assert!(error_string.contains("test_error_at_macro"));
-    assert!(error_string.contains("Something went wrong with value: 42"));
-    assert!(error_string.contains(file!()));
-
-    println!("error_at macro test: {error_string}");
-  }
-
-  #[test]
-  fn test_diagnostic_error_macro_with_code_and_help() {
-    let error = diagnostic_error!(
-      code = "test::error::with_help",
-      help = "Try checking your input parameters",
-      "Database connection failed: {}",
-      "timeout"
-    );
-
-    let error_string = format!("{error:?}");
-
-    // Should contain all diagnostic information
-    assert!(error_string.contains("test::error::with_help"));
-    assert!(error_string.contains("Try checking your input parameters"));
-    assert!(error_string.contains("Database connection failed: timeout"));
-    assert!(error_string.contains("Error at"));
-    assert!(error_string.contains(file!()));
-
-    println!("diagnostic_error with help test: {error_string}");
-  }
-
-  #[test]
-  fn test_diagnostic_error_macro_code_only() {
-    let error = diagnostic_error!(
-      code = "test::error::code_only",
-      "Validation failed for input: {}",
-      "empty_string"
-    );
-
-    let error_string = format!("{error:?}");
-
-    // Should contain code and message
-    assert!(error_string.contains("test::error::code_only"));
-    assert!(error_string.contains("Validation failed for input: empty_string"));
-    assert!(error_string.contains("Error at"));
-
-    println!("diagnostic_error code only test: {error_string}");
-  }
-
-  #[test]
-  fn test_with_context_preserves_original_error() {
-    let result = with_context!(failing_io_operation(), "File operation");
-    let error = result.unwrap_err();
-    let error_string = format!("{error:?}");
-
-    // Should contain both context and original IO error details
-    assert!(error_string.contains("File operation"));
-    assert!(
-      error_string.contains("No such file or directory")
-        || error_string.contains("cannot find the file")
-    );
-
-    println!("Context preservation test: {error_string}");
-  }
-
-  #[test]
-  fn test_multiple_context_layers() {
-    let result: Result<String> =
-      with_context!(failing_io_operation(), "Reading config")
-        .and_then(|_| Err(miette!("Processing failed")))
-        .wrap_err("Application startup failed");
-
-    let error = result.unwrap_err();
-    let error_string = format!("{error:?}");
-
-    // Should show error chain
-    assert!(error_string.contains("Reading config"));
-    assert!(error_string.contains("Application startup failed"));
-
-    println!("Multiple context test: {error_string}");
-  }
-
-  #[test]
-  fn test_location_accuracy() {
-    // Test that different lines produce different location info
-    let error1 = error_at!("First error");
-    let error2 = error_at!("Second error");
-
-    let error1_string = format!("{error1:?}");
-    let error2_string = format!("{error2:?}");
-
-    // Should have different line numbers
-    assert_ne!(error1_string, error2_string);
-    assert!(error1_string.contains("First error"));
-    assert!(error2_string.contains("Second error"));
-
-    println!("Location accuracy test 1: {error1_string}");
-    println!("Location accuracy test 2: {error2_string}");
-  }
-
-  #[tokio::test]
-  async fn test_with_context_async() {
-    async fn async_failing_operation() -> io::Result<String> {
-      tokio::fs::read_to_string("nonexistent_async_file.txt").await
-    }
-
-    let result =
-      with_context!(async_failing_operation().await, "Async file read");
-
-    assert!(result.is_err());
-    let error_string = format!("{:?}", result.unwrap_err());
-
-    // Should work in async context
-    assert!(error_string.contains("Async file read"));
-    assert!(error_string.contains("test_with_context_async"));
-
-    println!("Async context test: {error_string}");
-  }
-
-  #[test]
-  fn test_integration_with_standard_miette_features() {
-    // Test that our extensions work with standard miette features
-    let error = diagnostic_error!(
-      code = "integration::test",
-      help = "This tests integration with miette",
-      "Integration test failed"
-    );
-
-    // Should be able to use standard miette methods
-    let wrapped = error.wrap_err("Outer context");
-    let error_string = format!("{wrapped:?}");
-
-    assert!(error_string.contains("integration::test"));
-    assert!(error_string.contains("Outer context"));
-    assert!(error_string.contains("Integration test failed"));
-
-    println!("Integration test: {error_string}");
-  }
-}
-
-// Example usage in documentation
-#[cfg(test)]
-mod usage_examples {
-  use super::*;
-  use std::fs;
-
-  /// Example showing typical usage patterns
-  #[test]
-  fn example_usage_patterns() {
-    // Pattern 1: Simple context with location
-    let _result1 = with_context!(
-      fs::read_to_string("config.toml"),
-      "Loading application config"
-    );
-
-    // Pattern 2: Custom error with location
-    let _error2 = error_at!("Database connection failed: {}", "timeout");
-
-    // Pattern 3: Diagnostic error with all features
-    let _error3 = diagnostic_error!(
-      code = "app::startup::config_missing",
-      help = "Ensure config.toml exists in the application directory",
-      "Configuration file not found: {}",
-      "config.toml"
-    );
-
-    // Pattern 4: Manual location tracking
-    let custom_error = miette!("Custom error");
-    let _located =
-      custom_error.with_source_location(file!(), line!(), column!());
-
-    println!("All usage patterns compiled successfully");
-  }
+  ($expr:expr, $msg:expr) => {{
+    let location = format!("{}:{}:{}", file!(), line!(), column!());
+    error!("");
+    $expr.into_diagnostic().map_err(|original_error| {
+      miette!(
+        "{} (at {})\n\nCaused by: {}",
+        $msg,
+        location,
+        original_error
+      )
+    })
+  }};
 }

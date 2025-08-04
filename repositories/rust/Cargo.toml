@@ -47,6 +47,8 @@ anyhow = "1.0.91"
 # -- Tracing & Logging
 tracing = "0.1.40"
 tracing-subscriber = { version = "0.3.18", features = ["env-filter"] }
+# colored = "3.0.0"
+owo-colors = "4.2.2"
 
 # -- Macros & Constructors
 # cfg-if = "1.0.1"

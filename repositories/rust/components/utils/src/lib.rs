@@ -1,33 +1,25 @@
+mod delimiter;
 mod examples;
+mod print;
 mod timer;
+
+pub use delimiter::*;
+pub use print::*;
+pub use std::{
+  any::Any,
+  collections::{HashMap, HashSet},
+  error::Error as StdError,
+  ffi::OsStr,
+  fmt::{Display, Formatter, Result as FmtResult},
+  fs::{File, create_dir_all, metadata, read_dir, remove_file},
+  future::Future,
+  io::{BufRead, BufReader, Error as IOError, ErrorKind, Read},
+  panic::Location as StdLocation,
+  path::{Path, PathBuf},
+  process::{ExitCode, ExitStatus, exit},
+  result::Result as StdResult,
+  sync::{Arc, Mutex},
+  thread::sleep,
+  time::SystemTime,
+};
 pub use timer::*;
-
-// mod scope;
-// pub use scope::*;
-
-pub fn print_banner(description: &str, name: &str, version: &str) {
-  // Build the core message and compute its length
-  let msg = format!("Welcome to the {description} ({name} v.{version})");
-  let width = msg.chars().count();
-
-  // Define border pieces
-  let indent = "    ";
-  let horiz = "─".repeat(width + 2); // +2 for a space on each side of the message
-
-  // Top border
-  println!("{indent}┌{horiz}┐");
-
-  // Message line, padded by one space each side
-  println!("{indent}│ {msg} │");
-
-  // Bottom border
-  println!("{indent}└{horiz}┘");
-}
-
-pub fn init_tracing(lvl: tracing::Level) {
-  tracing_subscriber::fmt()
-    .with_max_level(lvl)
-    .without_time()
-    .with_target(false)
-    .init();
-}
